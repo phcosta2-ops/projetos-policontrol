@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PMO — Projetos DNP Policontrol</title>
+<style>
+:root {
+  --bg:#f4f6fa; --card:#fff; --border:#e2e8f0; --text:#1a202c; --text2:#64748b;
+  --accent:#3b5bdb; --accent2:#4c6ef5; --green:#22c55e; --yellow:#f59e0b;
+  --orange:#f97316; --red:#ef4444; --blue:#3b82f6; --gray:#94a3b8;
+  --red-light:#fee2e2; --yellow-light:#fef3c7; --green-light:#dcfce7;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; }
+
+.header { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 28px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-logo { font-weight: 800; font-size: 18px; color: var(--accent); letter-spacing: -0.5px; }
+.brand-logo span { color: var(--text2); font-weight: 400; }
+.brand-tag { font-size: 13px; font-weight: 600; color: var(--accent); }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.user-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; }
+.sync-indicator { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 5px; }
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gray); display: inline-block; transition: background 0.3s; }
+.sync-dot.syncing { background: var(--yellow); animation: pulse 1s infinite; }
+.sync-dot.synced { background: var(--green); }
+.sync-dot.error { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+.btn { padding: 8px 18px; border-radius: 20px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-sm { padding: 5px 14px; font-size: 12px; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text2); border-radius: 8px; }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+.nav-tabs { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 28px; display: flex; gap: 0; }
+.nav-tab { padding: 14px 20px; font-size: 13px; font-weight: 600; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.view { display: none; padding: 24px 28px; }
+.view.active { display: block; }
+
+.kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 24px; }
+.kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.kpi-num { font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+.kpi-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+.kpi-green .kpi-num { color: var(--green); }
+.kpi-red .kpi-num { color: var(--red); }
+.kpi-yellow .kpi-num { color: var(--yellow); }
+.kpi-gray .kpi-num { color: var(--gray); }
+.kpi-blue .kpi-num { color: var(--blue); }
+.kpi-orange .kpi-num { color: var(--orange); }
+
+.dash-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-bottom: 20px; }
+.dash-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 20px; }
+.dash-row-full { margin-bottom: 20px; }
+.dash-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; }
+.dash-card-title { font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.dash-card-sub { font-size: 12px; color: var(--text2); margin-bottom: 18px; }
+
+.donut-wrap { position: relative; width: 120px; height: 120px; margin: 0 auto 16px; }
+.donut-wrap svg { transform: rotate(-90deg); }
+.donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.donut-big { font-size: 22px; font-weight: 800; }
+.donut-small { font-size: 10px; color: var(--text2); }
+.donut-legend { display: flex; flex-direction: column; gap: 6px; }
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-count { margin-left: auto; font-weight: 700; color: var(--text); }
+
+.desl-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.desl-item { background: var(--bg); border-radius: 10px; padding: 14px 16px; text-align: center; }
+.desl-area { font-size: 11px; color: var(--text2); font-weight: 600; margin-bottom: 6px; }
+.desl-days { font-size: 32px; font-weight: 800; color: var(--red); line-height: 1; margin-bottom: 4px; }
+.desl-days.ok { color: var(--green); }
+.desl-sub { font-size: 11px; color: var(--text2); }
+.desl-item.highlight { background: #eff6ff; border: 1px solid #bfdbfe; }
+.desl-item.highlight .desl-area { color: var(--accent); }
+.desl-item.highlight .desl-days { color: var(--accent); }
+
+.bar-list { display: flex; flex-direction: column; gap: 8px; max-height: 380px; overflow-y: auto; }
+.bar-item { display: flex; align-items: center; gap: 10px; }
+.bar-name { width: 200px; flex-shrink: 0; font-size: 12px; color: var(--text2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track { flex: 1; background: var(--bg); border-radius: 4px; height: 20px; position: relative; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; }
+.bar-fill span { font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap; }
+
+.metas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.meta-area-card { background: var(--bg); border-radius: 10px; padding: 16px; }
+.meta-area-title { font-size: 14px; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.meta-area-sub { font-size: 11px; color: var(--text2); margin-bottom: 14px; }
+.meta-tipo-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.meta-tipo-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.meta-tipo-name { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; }
+.meta-tag { font-size: 10px; background: #dbeafe; color: var(--accent); border-radius: 4px; padding: 1px 6px; font-weight: 700; }
+.meta-right { text-align: right; }
+.meta-progress { font-size: 20px; font-weight: 800; color: var(--text); }
+.meta-progress.done { color: var(--green); }
+.meta-em-andamento { font-size: 11px; color: var(--blue); font-weight: 600; }
+.meta-dots { display: flex; gap: 4px; margin-top: 12px; flex-wrap: wrap; }
+.meta-dot { width: 16px; height: 16px; border-radius: 3px; }
+.contratado-line { margin-top: 12px; font-size: 13px; color: var(--text2); }
+.contratado-line strong { color: var(--yellow); }
+
+.table-filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.search-input { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; color: var(--text); font-size: 13px; width: 240px; outline: none; }
+.search-input:focus { border-color: var(--accent); }
+.filter-btn { padding: 5px 13px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--text2); font-size: 12px; cursor: pointer; transition: all 0.15s; font-weight: 500; }
+.filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+.filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.filter-sep { color: var(--border); }
+.table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); background: var(--card); }
+.projects-table { width: 100%; border-collapse: collapse; }
+.projects-table thead tr { background: #f8fafc; }
+.projects-table th { padding: 10px 14px; text-align: left; font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; border-bottom: 1px solid var(--border); }
+.projects-table tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
+.projects-table tbody tr:hover { background: #f8fafc; }
+.projects-table td { padding: 12px 14px; vertical-align: middle; }
+.badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.badge-prazo { background: #dcfce7; color: #16a34a; }
+.badge-atrasado { background: #fee2e2; color: #dc2626; }
+.badge-risco { background: #fef3c7; color: #d97706; }
+.badge-parado { background: #f1f5f9; color: #64748b; }
+.badge-concluido { background: #dbeafe; color: #1d4ed8; }
+.badge-phase { background: #f1f5f9; color: #475569; border: 1px solid var(--border); }
+.badge-area { background: #eff6ff; color: #3b82f6; font-size: 10px; font-weight: 700; }
+.actions-count { border-radius: 6px; padding: 3px 8px; font-size: 12px; font-weight: 700; }
+.actions-count.has-late { background: #fee2e2; color: #dc2626; }
+.actions-count.pending { background: #fef3c7; color: #d97706; }
+.actions-count.all-ok { background: #dcfce7; color: #16a34a; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 32px 16px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 700px; padding: 28px; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
+.modal-close { position: absolute; top: 16px; right: 16px; background: #f1f5f9; border: none; color: var(--text2); border-radius: 8px; padding: 4px 10px; cursor: pointer; font-size: 16px; }
+.modal-close:hover { background: var(--border); }
+.modal-code { font-family: monospace; font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+.modal-title { font-size: 20px; font-weight: 800; line-height: 1.3; margin-bottom: 10px; }
+.modal-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.modal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+.modal-field label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 5px; font-weight: 600; }
+.modal-field select, .modal-field input[type="date"] { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 13px; width: 100%; outline: none; }
+.modal-field select:focus, .modal-field input:focus { border-color: var(--accent); }
+.section-hdr { font-size: 12px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+.action-item { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; display: flex; gap: 10px; align-items: flex-start; }
+.action-item.late { border-color: #fca5a5; background: #fff1f1; }
+.action-item.done { opacity: 0.5; }
+.action-check { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.action-check:hover { border-color: var(--accent); }
+.action-check.checked { background: var(--green); border-color: var(--green); }
+.action-check.checked::after { content: '✓'; color: #fff; font-size: 10px; font-weight: 700; }
+.action-body { flex: 1; }
+.action-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+.action-meta { font-size: 11px; color: var(--text2); display: flex; gap: 10px; flex-wrap: wrap; }
+.action-late-tag { color: var(--red); font-weight: 700; }
+.action-delete { background: none; border: none; color: var(--text2); cursor: pointer; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+.action-delete:hover { color: var(--red); background: #fee2e2; }
+.add-action-row { display: flex; gap: 8px; margin-top: 8px; }
+.add-action-row input { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; color: var(--text); font-size: 13px; outline: none; flex: 1; }
+.add-action-row input:focus { border-color: var(--accent); }
+.add-action-row input[type="date"] { width: 150px; flex: none; }
+.update-section { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 18px; }
+.update-input { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 13px; width: 100%; outline: none; resize: vertical; min-height: 68px; }
+.update-input:focus { border-color: var(--accent); }
+.update-list { margin-top: 10px; max-height: 120px; overflow-y: auto; }
+.update-item { background: #f8fafc; border-radius: 8px; padding: 9px 12px; margin-bottom: 5px; border-left: 3px solid var(--accent); }
+.update-item-date { font-size: 11px; color: var(--text2); margin-bottom: 3px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.empty { text-align: center; padding: 60px; color: var(--text2); }
+.loading { text-align: center; padding: 80px; color: var(--text2); font-size: 15px; }
+.toast { position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: 13px; z-index: 999; animation: toastIn 0.2s ease; box-shadow: 0 8px 32px rgba(0,0,0,.12); font-weight: 600; }
+.toast.success { border-color: var(--green); color: #16a34a; }
+.toast.error { border-color: var(--red); color: var(--red); }
+@keyframes toastIn { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+@media (max-width: 900px) {
+  .kpi-row { grid-template-columns: repeat(3,1fr); }
+  .dash-row { grid-template-columns: 1fr; }
+  .dash-row-2 { grid-template-columns: 1fr; }
+  .metas-grid { grid-template-columns: 1fr; }
+  .desl-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <div class="brand-logo">PoliControl <span>Instrumentos Analíticos</span></div>
+    <div class="brand-tag">Projetos DNP</div>
+  </div>
+  <div class="header-right">
+    <div class="sync-indicator">
+      <span class="sync-dot" id="syncDot"></span>
+      <span id="syncLabel">carregando...</span>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="openNewProject()">+ Novo</button>
+  </div>
+</div>
+
+<div class="nav-tabs">
+  <div class="nav-tab active" onclick="switchView('dashboard')">📊 Dashboard</div>
+  <div class="nav-tab" onclick="switchView('list')">📋 Projetos</div>
+</div>
+
+<!-- DASHBOARD VIEW -->
+<div class="view active" id="view-dashboard">
+  <div class="kpi-row" id="kpiRow"><div class="loading">⏳ Carregando projetos...</div></div>
+  <div class="dash-row" id="donutRow"></div>
+  <div class="dash-row-2">
+    <div class="dash-card" id="metasCard">
+      <div class="dash-card-title">🎯 Metas de Entrega — 1º Semestre 2026</div>
+      <div class="dash-card-sub">Projetos concluídos no semestre (meta ≥ 2 por tipo)</div>
+      <div class="metas-grid" id="metasGrid"></div>
+      <div class="contratado-line" id="contratadoLine"></div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-card-title">📐 Deslocamento dos Projetos</div>
+      <div class="dash-card-sub">Dias de atraso além da data prevista (0 = no prazo)</div>
+      <div class="desl-grid" id="deslocGrid"></div>
+    </div>
+  </div>
+  <div class="dash-card dash-row-full">
+    <div class="dash-card-title" style="margin-bottom:4px">Projetos Atrasados (dias de atraso)</div>
+    <div class="dash-card-sub"></div>
+    <div class="bar-list" id="barChart"></div>
+  </div>
+</div>
+
+<!-- LIST VIEW -->
+<div class="view" id="view-list">
+  <div class="table-filters">
+    <input class="search-input" type="text" placeholder="🔍 Buscar projeto..." id="searchInput" oninput="renderTable()">
+    <span class="filter-sep">|</span>
+    <div style="display:flex;gap:6px" id="statusFilters">
+      <button class="filter-btn active" onclick="setFilter('status','all',this)">Todos</button>
+      <button class="filter-btn" onclick="setFilter('status','Atrasado',this)">Atrasados</button>
+      <button class="filter-btn" onclick="setFilter('status','Em risco',this)">Em Risco</button>
+      <button class="filter-btn" onclick="setFilter('status','No prazo',this)">No Prazo</button>
+      <button class="filter-btn" onclick="setFilter('status','Parado',this)">Parado</button>
+    </div>
+    <span class="filter-sep">|</span>
+    <div style="display:flex;gap:6px" id="areaFilters">
+      <button class="filter-btn active" onclick="setFilter('area','all',this)">Todas</button>
+      <button class="filter-btn" onclick="setFilter('area','Des. Industrial',this)">Industrial</button>
+      <button class="filter-btn" onclick="setFilter('area','Des. Químico',this)">Químico</button>
+      <button class="filter-btn" onclick="setFilter('area','Contratado',this)">Contratado</button>
+      <button class="filter-btn" onclick="setFilter('area','Projetos Especiais',this)">Especiais</button>
+    </div>
+    <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openNewProject()">+ Novo Projeto</button>
+  </div>
+  <div id="projectsContainer"><div class="loading">⏳ Carregando...</div></div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOnOverlay(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-code" id="modalCode"></div>
+    <input type="text" id="modalTitle" style="font-size:18px;font-weight:800;border:none;border-bottom:2px solid var(--border);outline:none;width:100%;margin-bottom:10px;padding:4px 0;background:transparent;color:var(--text)" placeholder="Nome do projeto...">
+    <div class="modal-badges" id="modalBadges"></div>
+    <div class="modal-grid">
+      <div class="modal-field"><label>Status</label>
+        <select id="editStatus">
+          <option value="No prazo">✅ No prazo</option>
+          <option value="Atrasado">🔴 Atrasado</option>
+          <option value="Em risco">⚠️ Em risco</option>
+          <option value="Parado">⏸ Parado</option>
+          <option value="Concluído">🏁 Concluído</option>
+        </select></div>
+      <div class="modal-field"><label>Fase</label>
+        <select id="editPhase">
+          <option>Ideação</option><option>Desenvolvimento</option><option>Testes</option><option>Validação</option><option>Lançamento</option>
+        </select></div>
+      <div class="modal-field"><label>Previsão Final</label><input type="date" id="editPrevisao"></div>
+      <div class="modal-field"><label>Área</label>
+        <select id="editArea">
+          <option>Des. Industrial</option><option>Des. Químico</option><option>Contratado</option><option>Projetos Especiais</option>
+        </select></div>
+      <div class="modal-field"><label>Responsável</label>
+        <select id="editOwner">
+          <option value="raphael">Raphael Costa</option>
+          <option value="rodrigo">Rodrigo Costa</option>
+          <option value="luciana">Luciana Lima</option>
+          <option value="teresa">Teresa Costa</option>
+          <option value="marcelo">Marcelo Câmara</option>
+        </select></div>
+      <div class="modal-field"><label>Tipo</label>
+        <select id="editTipo">
+          <option>Novo Produto</option><option>Melhoria / Red. Custo</option><option>Contratado</option><option>Outro</option>
+        </select></div>
+    </div>
+    <div>
+      <div class="section-hdr">Ações <button class="btn btn-outline btn-sm" onclick="focusAddAction()">+ Adicionar</button></div>
+      <div id="actionsList"></div>
+      <div class="add-action-row">
+        <input type="text" id="newActionTitle" placeholder="Título da ação..." onkeydown="if(event.key==='Enter') addAction()">
+        <input type="date" id="newActionDate">
+        <select id="newActionOwner" style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-size:13px;outline:none;">
+          <option value="raphael">Raphael</option>
+          <option value="rodrigo">Rodrigo</option>
+          <option value="luciana">Luciana</option>
+          <option value="teresa">Teresa</option>
+          <option value="marcelo">Marcelo</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="addAction()">Adicionar</button>
+      </div>
+    </div>
+    <div class="update-section">
+      <div class="section-hdr" style="margin-bottom:8px">Registrar Atualização</div>
+      <textarea class="update-input" id="updateInput" placeholder="O que aconteceu? Decisões, bloqueios, progresso..."></textarea>
+      <div class="update-list" id="updateList"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveProject()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const OWNERS = { raphael:'Raphael Costa', rodrigo:'Rodrigo Costa', luciana:'Luciana Lima', teresa:'Teresa Costa', marcelo:'Marcelo Câmara' };
+const STATUS_COLORS = { 'No prazo':'#22c55e','Atrasado':'#ef4444','Em risco':'#f59e0b','Parado':'#94a3b8','Concluído':'#3b82f6' };
+
+let projects = [];
+let currentProject = null;
+let filters = { status:'all', area:'all' };
+const today = new Date(); today.setHours(0,0,0,0);
+
+function setSyncState(state, label) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  dot.className = 'sync-dot ' + state;
+  lbl.textContent = label;
+}
+
+async function load() {
+  setSyncState('syncing', 'carregando...');
+  try {
+    const r = await fetch('/api/projects');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const { projects: data } = await r.json();
+    projects = Array.isArray(data) && data.length > 0 ? data : [];
+    setSyncState('synced', 'sincronizado');
+  } catch(e) {
+    setSyncState('error', 'erro ao carregar');
+    showToast('Erro ao carregar projetos: ' + e.message, 'error');
+    projects = [];
+  }
+  renderDashboard();
+  renderTable();
+}
+
+async function save() {
+  setSyncState('syncing', 'salvando...');
+  try {
+    const r = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projects }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    setSyncState('synced', 'salvo ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}));
+  } catch(e) {
+    setSyncState('error', 'erro ao salvar');
+    showToast('Erro ao salvar: ' + e.message, 'error');
+  }
+}
+
+function fmt(iso) { if (!iso) return '—'; const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; }
+function isLate(dueDate, status) { if (!dueDate||['Concluída','Cancelada'].includes(status)) return false; return new Date(dueDate)<today; }
+function daysLate(iso) { return Math.max(0,Math.floor((today-new Date(iso))/86400000)); }
+function projDaysLate(p) { if (!p.previsaoFinal||p.status==='Concluído') return 0; return Math.max(0,Math.floor((today-new Date(p.previsaoFinal))/86400000)); }
+function statusBadge(s) { const m={'No prazo':'badge-prazo','Atrasado':'badge-atrasado','Em risco':'badge-risco','Parado':'badge-parado','Concluído':'badge-concluido'}; return `<span class="badge ${m[s]||''}">${s}</span>`; }
+
+function switchView(v) {
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.querySelectorAll('.nav-tab')[v==='dashboard'?0:1].classList.add('active');
+}
+
+function renderDashboard() {
+  const counts = {}, areas = {};
+  let totalA=0, lateA=0;
+  projects.forEach(p => {
+    counts[p.status]=(counts[p.status]||0)+1;
+    if (!areas[p.area]) areas[p.area]={total:0,atrasado:0,risco:0,prazo:0,parado:0,concluido:0};
+    areas[p.area].total++;
+    if (p.status==='Atrasado') areas[p.area].atrasado++;
+    else if (p.status==='Em risco') areas[p.area].risco++;
+    else if (p.status==='No prazo') areas[p.area].prazo++;
+    else if (p.status==='Parado') areas[p.area].parado++;
+    else if (p.status==='Concluído') areas[p.area].concluido++;
+    (p.actions||[]).forEach(a=>{ if(!['Concluída','Cancelada'].includes(a.status)){totalA++;} if(isLate(a.dueDate,a.status))lateA++; });
+  });
+
+  document.getElementById('kpiRow').innerHTML = `
+    <div class="kpi-card kpi-green"><div class="kpi-num">${counts['No prazo']||0}</div><div class="kpi-label">No Prazo</div></div>
+    <div class="kpi-card kpi-red"><div class="kpi-num">${counts['Atrasado']||0}</div><div class="kpi-label">Atrasados</div></div>
+    <div class="kpi-card kpi-yellow"><div class="kpi-num">${counts['Em risco']||0}</div><div class="kpi-label">Em Risco</div></div>
+    <div class="kpi-card kpi-gray"><div class="kpi-num">${counts['Parado']||0}</div><div class="kpi-label">Parados</div></div>
+    <div class="kpi-card kpi-blue"><div class="kpi-num">${totalA}</div><div class="kpi-label">Ações Pendentes</div></div>
+    <div class="kpi-card kpi-orange"><div class="kpi-num">${lateA}</div><div class="kpi-label">Ações Atrasadas</div></div>`;
+
+  const donutAreas = ['Des. Industrial','Des. Químico','Contratado'];
+  document.getElementById('donutRow').innerHTML = donutAreas.map(area => {
+    const d = areas[area]||{total:0,atrasado:0,risco:0,prazo:0,parado:0,concluido:0};
+    const slices = [
+      {v:d.prazo, c:'#22c55e', l:'No prazo'},
+      {v:d.atrasado, c:'#ef4444', l:'Atrasado'},
+      {v:d.risco, c:'#f59e0b', l:'Em risco'},
+      {v:d.parado, c:'#94a3b8', l:'Parado'},
+      {v:d.concluido, c:'#3b82f6', l:'Concluído'},
+    ].filter(s=>s.v>0);
+    const total = d.total||1;
+    const r=50, cx=60, cy=60, circ=2*Math.PI*r;
+    let offset=0;
+    const paths = slices.map(s=>{
+      const pct=s.v/total; const dash=pct*circ; const path=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.c}" stroke-width="18" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-offset*circ}" stroke-linecap="butt"/>`;
+      offset+=pct; return path;
+    }).join('');
+    const areaShort = area.replace('Des. ','');
+    const legend = slices.map(s=>`<div class="legend-item"><div class="legend-dot" style="background:${s.c}"></div><span>${s.l}</span><span class="legend-count">${s.v}</span></div>`).join('');
+    return `<div class="dash-card" style="text-align:center">
+      <div class="dash-card-title" style="justify-content:center">${areaShort}</div>
+      <div class="dash-card-sub" style="text-align:center">${d.total} projeto(s) ativo(s)</div>
+      <div class="donut-wrap"><svg viewBox="0 0 120 120" width="120" height="120">${paths}</svg>
+        <div class="donut-center"><span class="donut-big">${d.total}</span><span class="donut-small">projetos</span></div></div>
+      <div class="donut-legend">${legend}</div>
+    </div>`;
+  }).join('');
+
+  const metaAreas = ['Des. Industrial','Des. Químico'];
+  const areaIcons = {'Des. Industrial':'🏭','Des. Químico':'🧪'};
+  const dotColors = {'No prazo':'#3b82f6','Atrasado':'#f97316','Em risco':'#f59e0b','Parado':'#d1d5db','Concluído':'#22c55e'};
+  document.getElementById('metasGrid').innerHTML = metaAreas.map(area => {
+    const aPs = projects.filter(p=>p.area===area);
+    const tipos = ['Novo Produto','Melhoria / Red. Custo'];
+    const rows = tipos.map(tipo => {
+      const tPs = aPs.filter(p=>p.tipo===tipo);
+      const concluidos = tPs.filter(p=>p.status==='Concluído').length;
+      const emAndamento = tPs.filter(p=>p.status!=='Concluído').length;
+      return `<div class="meta-tipo-row">
+        <div class="meta-tipo-name"><span class="meta-tag">NEW</span>${tipo}</div>
+        <div class="meta-right">
+          <div class="meta-em-andamento">${emAndamento} em andamento</div>
+          <div class="meta-progress ${concluidos>=2?'done':''}">${concluidos}/2</div>
+        </div>
+      </div>`;
+    }).join('');
+    const dots = aPs.map(p=>`<div class="meta-dot" title="${p.name}" style="background:${dotColors[p.status]||'#d1d5db'}"></div>`).join('');
+    return `<div class="meta-area-card">
+      <div class="meta-area-title">${areaIcons[area]||''} ${area.replace('Des. ','')}</div>
+      <div class="meta-area-sub">${aPs.length} projeto(s) ativo(s)</div>
+      ${rows}
+      <div class="meta-dots">${dots}</div>
+    </div>`;
+  }).join('');
+
+  const contratados = projects.filter(p=>p.area==='Contratado');
+  const contAtrasados = contratados.filter(p=>p.status==='Atrasado').length;
+  document.getElementById('contratadoLine').innerHTML = `<strong>🟡 Contratado:</strong> ${contratados.length} projeto(s) ativo(s) — ${contAtrasados} atrasado(s)`;
+
+  const desAreas = ['Des. Industrial','Des. Químico','Contratado'];
+  const desCards = desAreas.map(area => {
+    const aPs = projects.filter(p=>p.area===area && p.previsaoFinal && p.status!=='Concluído');
+    const latePs = aPs.filter(p=>projDaysLate(p)>0);
+    const avg = latePs.length ? Math.round(latePs.reduce((s,p)=>s+projDaysLate(p),0)/aPs.length) : 0;
+    return `<div class="desl-item">
+      <div class="desl-area">${area.replace('Des. ','')}</div>
+      <div class="desl-days ${avg===0?'ok':''}">${avg}d</div>
+      <div class="desl-sub">média · ${aPs.length} projeto(s)<br><span style="color:#ef4444">${latePs.length} atrasado(s)</span></div>
+    </div>`;
+  });
+  const allLate = projects.filter(p=>p.previsaoFinal&&p.status!=='Concluído'&&projDaysLate(p)>0);
+  const geral = allLate.length ? Math.round(allLate.reduce((s,p)=>s+projDaysLate(p),0)/projects.filter(p=>p.previsaoFinal&&p.status!=='Concluído').length) : 0;
+  desCards.push(`<div class="desl-item highlight">
+    <div class="desl-area">GERAL</div>
+    <div class="desl-days">${geral}d</div>
+    <div class="desl-sub">média geral</div>
+  </div>`);
+  document.getElementById('deslocGrid').innerHTML = desCards.join('');
+
+  const lateProjects = projects
+    .filter(p=>p.previsaoFinal&&p.status!=='Concluído')
+    .map(p=>({...p, days:projDaysLate(p)}))
+    .filter(p=>p.days>0)
+    .sort((a,b)=>b.days-a.days);
+  const maxD = lateProjects[0]?.days||1;
+  const barColor = d => d>300?'#ef4444':d>90?'#f97316':d>30?'#f59e0b':'#fbbf24';
+  document.getElementById('barChart').innerHTML = lateProjects.length
+    ? lateProjects.map(p=>`<div class="bar-item">
+        <div class="bar-name" title="${p.name}">${p.name.length>30?p.name.substring(0,30)+'…':p.name}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${Math.max(4,(p.days/maxD)*100)}%;background:${barColor(p.days)}">
+            <span>${p.days}d</span>
+          </div>
+        </div>
+      </div>`).join('')
+    : '<div style="color:var(--text2);padding:20px;text-align:center">✅ Nenhum projeto atrasado!</div>';
+}
+
+function getFiltered() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  return projects.filter(p => {
+    if (filters.status!=='all'&&p.status!==filters.status) return false;
+    if (filters.area!=='all'&&p.area!==filters.area) return false;
+    if (q&&!p.name.toLowerCase().includes(q)&&!(p.code||'').toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function renderTable() {
+  const filtered = getFiltered();
+  const container = document.getElementById('projectsContainer');
+  if (!filtered.length) { container.innerHTML='<div class="empty">📭 Nenhum projeto encontrado</div>'; return; }
+  const rows = filtered.map(p => {
+    const pending=(p.actions||[]).filter(a=>!['Concluída','Cancelada'].includes(a.status));
+    const late=pending.filter(a=>isLate(a.dueDate,a.status)).length;
+    const cls=late>0?'has-late':pending.length>0?'pending':'all-ok';
+    const lbl=late>0?`⚠ ${late} atrasada${late>1?'s':''}`:pending.length>0?`${pending.length} ação${pending.length>1?'ões':''}`:'✓';
+    return `<tr onclick="openProject('${p.id}')">
+      <td style="font-family:monospace;font-size:12px;color:var(--text2)">${p.code||'—'}</td>
+      <td><span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;display:block" title="${p.name}">${p.name}</span></td>
+      <td><span class="badge badge-area">${p.area}</span></td>
+      <td><span class="badge badge-phase">${p.phase}</span></td>
+      <td>${statusBadge(p.status)}</td>
+      <td style="font-size:12px">${OWNERS[p.owner]||p.owner}</td>
+      <td style="font-size:12px">${fmt(p.previsaoFinal)}</td>
+      <td><span class="actions-count ${cls}">${lbl}</span></td>
+    </tr>`;
+  }).join('');
+  container.innerHTML=`<div class="table-wrap"><table class="projects-table">
+    <thead><tr><th>Código</th><th>Projeto</th><th>Área</th><th>Fase</th><th>Status</th><th>Responsável</th><th>Previsão</th><th>Ações</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+function setFilter(type, val, btn) {
+  filters[type]=val;
+  const g=type==='status'?'statusFilters':'areaFilters';
+  document.querySelectorAll(`#${g} .filter-btn`).forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable();
+}
+
+function openProject(id) {
+  currentProject = JSON.parse(JSON.stringify(projects.find(p=>p.id===id)));
+  if (!currentProject) return;
+  const p=currentProject;
+  document.getElementById('modalCode').textContent=p.code||p.id;
+  document.getElementById('modalTitle').value=p.name;
+  document.getElementById('modalBadges').innerHTML=statusBadge(p.status)+` <span class="badge badge-area">${p.area}</span> <span class="badge badge-phase">${p.phase}</span>`;
+  document.getElementById('editStatus').value=p.status;
+  document.getElementById('editPhase').value=p.phase;
+  document.getElementById('editArea').value=p.area;
+  document.getElementById('editOwner').value=p.owner;
+  document.getElementById('editTipo').value=p.tipo;
+  document.getElementById('editPrevisao').value=p.previsaoFinal||'';
+  document.getElementById('updateInput').value='';
+  document.getElementById('newActionOwner').value=p.owner;
+  renderActions(); renderUpdates();
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function openNewProject() {
+  const id='dnp-new-'+Date.now();
+  projects.push({id,name:'Novo Projeto',code:'',area:'Des. Industrial',phase:'Ideação',status:'No prazo',owner:'raphael',tipo:'Novo Produto',previsaoFinal:null,actions:[],updates:[],dataAtualizacao:null});
+  switchView('list');
+  openProject(id);
+}
+
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); currentProject=null; }
+function closeModalOnOverlay(e) { if(e.target===document.getElementById('modalOverlay'))closeModal(); }
+
+function renderActions() {
+  const list=document.getElementById('actionsList');
+  if (!currentProject.actions||!currentProject.actions.length) { list.innerHTML='<div style="color:var(--text2);font-size:13px;padding:8px 0 12px">Nenhuma ação cadastrada.</div>'; return; }
+  list.innerHTML=currentProject.actions.map((a,i)=>{
+    const late=isLate(a.dueDate,a.status), done=['Concluída','Cancelada'].includes(a.status);
+    return `<div class="action-item ${late&&!done?'late':''} ${done?'done':''}">
+      <div class="action-check ${done?'checked':''}" onclick="toggleAction(${i})"></div>
+      <div class="action-body">
+        <div class="action-title">${a.title}</div>
+        <div class="action-meta">
+          ${a.dueDate?`<span>📅 ${fmt(a.dueDate)}</span>`:'<span>Sem prazo</span>'}
+          ${late&&!done?`<span class="action-late-tag">⚠ ${daysLate(a.dueDate)}d atraso</span>`:''}
+          <span>${OWNERS[a.assignee]||a.assignee||'—'}</span>
+        </div>
+      </div>
+      <button class="action-delete" onclick="deleteAction(${i})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function toggleAction(i) { currentProject.actions[i].status=['Concluída','Cancelada'].includes(currentProject.actions[i].status)?'Pendente':'Concluída'; renderActions(); }
+function deleteAction(i) { currentProject.actions.splice(i,1); renderActions(); }
+function focusAddAction() { document.getElementById('newActionTitle').focus(); }
+function addAction() {
+  const title=document.getElementById('newActionTitle').value.trim();
+  if(!title)return;
+  const assignee=document.getElementById('newActionOwner').value||currentProject.owner;
+  currentProject.actions.push({id:'a'+Date.now(),title,status:'Pendente',dueDate:document.getElementById('newActionDate').value||null,assignee});
+  document.getElementById('newActionTitle').value=''; document.getElementById('newActionDate').value='';
+  document.getElementById('newActionOwner').value=currentProject.owner;
+  renderActions();
+}
+
+function renderUpdates() {
+  document.getElementById('updateList').innerHTML=(currentProject.updates||[]).slice().reverse()
+    .map(u=>`<div class="update-item"><div class="update-item-date">${fmt(u.date)} — ${u.author||'Raphael'}</div><div>${u.text}</div></div>`).join('');
+}
+
+async function saveProject() {
+  if(!currentProject)return;
+  const p=currentProject;
+  p.name=document.getElementById('modalTitle').value.trim()||p.name;
+  p.status=document.getElementById('editStatus').value;
+  p.phase=document.getElementById('editPhase').value;
+  p.area=document.getElementById('editArea').value;
+  p.owner=document.getElementById('editOwner').value;
+  p.tipo=document.getElementById('editTipo').value;
+  p.previsaoFinal=document.getElementById('editPrevisao').value||null;
+  const txt=document.getElementById('updateInput').value.trim();
+  if(txt){if(!p.updates)p.updates=[];p.updates.push({date:new Date().toISOString().split('T')[0],text:txt,author:OWNERS[p.owner]||p.owner});}
+  p.dataAtualizacao=new Date().toISOString().split('T')[0];
+  const idx=projects.findIndex(x=>x.id===p.id);
+  if(idx>=0)projects[idx]=p;
+  closeModal();
+  renderDashboard();
+  renderTable();
+  await save();
+  showToast('✅ Projeto salvo!','success');
+}
+
+function showToast(msg,type){const t=document.createElement('div');t.className=`toast ${type||''}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
+
+load();
+</script>
+</body>
+</html>
