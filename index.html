@@ -186,6 +186,28 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .crono-status-ok { color: var(--text2); font-size: 12px; }
 .crono-empty { color: var(--text2); font-size: 13px; padding: 12px 0; }
 
+/* ETAPA GROUPS */
+.etapa-group { margin-bottom: 14px; }
+.etapa-header { font-size: 12px; font-weight: 700; color: var(--accent); background: #eff6ff; border-radius: 6px; padding: 6px 10px; margin-bottom: 4px; letter-spacing: 0.3px; }
+.action-row-crono { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 5px; display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.action-row-crono.late { border-color: #fca5a5; background: #fff1f1; }
+.action-row-crono.done { opacity: 0.5; }
+.action-num { font-size: 11px; color: var(--text2); font-family: monospace; flex-shrink: 0; min-width: 30px; }
+.action-row-title { flex: 1; font-weight: 600; }
+.action-resp-badge { font-size: 11px; color: var(--text2); background: #f1f5f9; border-radius: 4px; padding: 2px 7px; white-space: nowrap; flex-shrink: 0; }
+.action-dates { font-size: 11px; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
+.action-dias { font-size: 11px; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
+.action-late-crono { font-size: 11px; color: var(--red); font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+/* ADD ACTION FORM */
+.add-action-form { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+.add-action-form input, .add-action-form select { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; color: var(--text); font-size: 13px; outline: none; }
+.add-action-form input:focus, .add-action-form select:focus { border-color: var(--accent); }
+.add-action-form .inp-etapa { width: 200px; }
+.add-action-form .inp-num { width: 70px; }
+.add-action-form .inp-title { flex: 1; min-width: 160px; }
+.add-action-form .inp-resp { width: 130px; }
+.add-action-form .inp-date { width: 140px; }
+
 .toast { position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: 13px; z-index: 999; animation: toastIn 0.2s ease; box-shadow: 0 8px 32px rgba(0,0,0,.12); font-weight: 600; }
 .toast.success { border-color: var(--green); color: #16a34a; }
 .toast.error { border-color: var(--red); color: var(--red); }
@@ -309,31 +331,26 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
         </select></div>
     </div>
     <div>
-      <div class="section-hdr">Ações <button class="btn btn-outline btn-sm" onclick="focusAddAction()">+ Adicionar</button></div>
-      <div id="actionsList"></div>
-      <div class="add-action-row">
-        <input type="text" id="newActionTitle" placeholder="Título da ação..." onkeydown="if(event.key==='Enter') addAction()">
-        <input type="date" id="newActionDate">
-        <select id="newActionOwner" style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-size:13px;outline:none;">
-          <option value="raphael">Raphael</option>
-          <option value="rodrigo">Rodrigo</option>
-          <option value="luciana">Luciana</option>
-          <option value="teresa">Teresa</option>
-          <option value="marcelo">Marcelo</option>
-        </select>
-        <button class="btn btn-primary btn-sm" onclick="addAction()">Adicionar</button>
-      </div>
-    </div>
-    <!-- CRONOGRAMA -->
-    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
-      <div class="section-hdr" style="margin-bottom:10px">
-        📅 Cronograma
+      <div class="section-hdr">
+        Ações
         <label class="btn btn-outline btn-sm" style="cursor:pointer;margin-left:8px">
           ⬆ Importar ODS
           <input type="file" id="cronogramaFile" accept=".ods" style="display:none" onchange="importCronograma(this)">
         </label>
       </div>
-      <div id="cronogramaView"></div>
+      <div id="actionsList"></div>
+      <div class="add-action-form">
+        <select id="newActionEtapa" class="inp-etapa" onchange="handleEtapaSelect(this)">
+          <option value="">— Etapa —</option>
+        </select>
+        <input type="text" id="newEtapaName" class="inp-etapa" placeholder="Nome da nova etapa..." style="display:none">
+        <input type="text" id="newActionNum" class="inp-num" placeholder="Num (ex: 1.1)">
+        <input type="text" id="newActionTitle" class="inp-title" placeholder="Título da atividade..." onkeydown="if(event.key==='Enter') addAction()">
+        <input type="text" id="newActionResp" class="inp-resp" placeholder="Responsável">
+        <input type="date" id="newActionInicio" class="inp-date">
+        <input type="date" id="newActionFim" class="inp-date">
+        <button class="btn btn-primary btn-sm" onclick="addAction()">+ Adicionar</button>
+      </div>
     </div>
 
     <div class="update-section">
@@ -603,8 +620,7 @@ function openProject(id) {
   document.getElementById('editTipo').value=p.tipo;
   document.getElementById('editPrevisao').value=p.previsaoFinal||'';
   document.getElementById('updateInput').value='';
-  document.getElementById('newActionOwner').value=p.owner;
-  renderActions(); renderUpdates(); renderCronograma();
+  renderActions(); renderUpdates(); populateEtapaSelect();
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -619,36 +635,111 @@ function closeModal() { document.getElementById('modalOverlay').classList.remove
 function closeModalOnOverlay(e) { if(e.target===document.getElementById('modalOverlay'))closeModal(); }
 
 function renderActions() {
-  const list=document.getElementById('actionsList');
-  if (!currentProject.actions||!currentProject.actions.length) { list.innerHTML='<div style="color:var(--text2);font-size:13px;padding:8px 0 12px">Nenhuma ação cadastrada.</div>'; return; }
-  list.innerHTML=currentProject.actions.map((a,i)=>{
-    const late=isLate(a.dueDate,a.status), done=['Concluída','Cancelada'].includes(a.status);
-    return `<div class="action-item ${late&&!done?'late':''} ${done?'done':''}">
-      <div class="action-check ${done?'checked':''}" onclick="toggleAction(${i})"></div>
-      <div class="action-body">
-        <div class="action-title">${a.title}</div>
-        <div class="action-meta">
-          ${a.dueDate?`<span>📅 ${fmt(a.dueDate)}</span>`:'<span>Sem prazo</span>'}
-          ${late&&!done?`<span class="action-late-tag">⚠ ${daysLate(a.dueDate)}d atraso</span>`:''}
-          <span>${OWNERS[a.assignee]||a.assignee||'—'}</span>
-        </div>
-      </div>
-      <button class="action-delete" onclick="deleteAction(${i})">✕</button>
-    </div>`;
-  }).join('');
+  const list = document.getElementById('actionsList');
+  if (!currentProject.actions || !currentProject.actions.length) {
+    list.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0 12px">Nenhuma ação cadastrada.</div>';
+    return;
+  }
+  // Group by etapa
+  const groups = {};
+  const groupOrder = [];
+  currentProject.actions.forEach((a, i) => {
+    const grp = a.etapa || 'Geral';
+    if (!groups[grp]) { groups[grp] = []; groupOrder.push(grp); }
+    groups[grp].push({ a, i });
+  });
+  const todayStr = new Date().toISOString().split('T')[0];
+  let html = '';
+  groupOrder.forEach(grp => {
+    html += `<div class="etapa-group"><div class="etapa-header">${grp}</div>`;
+    groups[grp].forEach(({ a, i }) => {
+      // Support legacy dueDate/assignee fields
+      const fimDate = a.fim || a.dueDate || null;
+      const inicioDate = a.inicio || null;
+      const resp = a.resp || (a.assignee ? (OWNERS[a.assignee] || a.assignee) : '—');
+      const done = ['Concluída', 'Cancelada'].includes(a.status);
+      const late = !done && fimDate && fimDate < todayStr;
+      const lateDays = late ? daysLate(fimDate) : 0;
+      const datesStr = (inicioDate || fimDate)
+        ? `${inicioDate ? fmt(inicioDate) : '—'} → ${fimDate ? fmt(fimDate) : '—'}`
+        : '';
+      const diasStr = a.dias ? `${a.dias}d` : '';
+      html += `<div class="action-row-crono ${late ? 'late' : ''} ${done ? 'done' : ''}">
+        <div class="action-check ${done ? 'checked' : ''}" onclick="toggleAction(${i})"></div>
+        ${a.num ? `<span class="action-num">${a.num}</span>` : ''}
+        <span class="action-row-title">${a.title}</span>
+        ${resp !== '—' ? `<span class="action-resp-badge">${resp}</span>` : ''}
+        ${datesStr ? `<span class="action-dates">${datesStr}</span>` : ''}
+        ${diasStr ? `<span class="action-dias">${diasStr}</span>` : ''}
+        ${late ? `<span class="action-late-crono">⚠ ${lateDays}d atraso</span>` : ''}
+        <button class="action-delete" onclick="deleteAction(${i})">✕</button>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  list.innerHTML = html;
 }
 
 function toggleAction(i) { currentProject.actions[i].status=['Concluída','Cancelada'].includes(currentProject.actions[i].status)?'Pendente':'Concluída'; renderActions(); }
-function deleteAction(i) { currentProject.actions.splice(i,1); renderActions(); }
+function deleteAction(i) { currentProject.actions.splice(i,1); renderActions(); populateEtapaSelect(); }
 function focusAddAction() { document.getElementById('newActionTitle').focus(); }
+
+function populateEtapaSelect() {
+  const sel = document.getElementById('newActionEtapa');
+  if (!sel) return;
+  const etapas = [...new Set((currentProject.actions||[]).map(a=>a.etapa).filter(Boolean))];
+  sel.innerHTML = '<option value="">— Etapa —</option>' +
+    etapas.map(e=>`<option value="${e.replace(/"/g,'&quot;')}">${e}</option>`).join('') +
+    '<option value="__nova__">+ Nova etapa...</option>';
+}
+
+function handleEtapaSelect(sel) {
+  const nameInput = document.getElementById('newEtapaName');
+  if (sel.value === '__nova__') {
+    nameInput.style.display = '';
+    nameInput.focus();
+  } else {
+    nameInput.style.display = 'none';
+  }
+}
+
 function addAction() {
-  const title=document.getElementById('newActionTitle').value.trim();
-  if(!title)return;
-  const assignee=document.getElementById('newActionOwner').value||currentProject.owner;
-  currentProject.actions.push({id:'a'+Date.now(),title,status:'Pendente',dueDate:document.getElementById('newActionDate').value||null,assignee});
-  document.getElementById('newActionTitle').value=''; document.getElementById('newActionDate').value='';
-  document.getElementById('newActionOwner').value=currentProject.owner;
+  const title = document.getElementById('newActionTitle').value.trim();
+  if (!title) return;
+  const etapaSel = document.getElementById('newActionEtapa').value;
+  let etapa = '';
+  if (etapaSel === '__nova__') {
+    etapa = document.getElementById('newEtapaName').value.trim() || '';
+  } else {
+    etapa = etapaSel || '';
+  }
+  const num = document.getElementById('newActionNum').value.trim() || '';
+  const resp = document.getElementById('newActionResp').value.trim() || '';
+  const inicio = document.getElementById('newActionInicio').value || null;
+  const fim = document.getElementById('newActionFim').value || null;
+  currentProject.actions.push({
+    id: 'a' + Date.now(),
+    etapa: etapa || undefined,
+    num: num || undefined,
+    title,
+    resp: resp || undefined,
+    dias: (inicio && fim) ? String(Math.max(1, Math.round((new Date(fim)-new Date(inicio))/86400000))) : undefined,
+    inicio,
+    fim,
+    // legacy compat
+    dueDate: fim,
+    assignee: undefined,
+    status: 'Pendente'
+  });
+  document.getElementById('newActionTitle').value = '';
+  document.getElementById('newActionNum').value = '';
+  document.getElementById('newActionResp').value = '';
+  document.getElementById('newActionInicio').value = '';
+  document.getElementById('newActionFim').value = '';
+  document.getElementById('newEtapaName').value = '';
+  document.getElementById('newEtapaName').style.display = 'none';
   renderActions();
+  populateEtapaSelect();
 }
 
 function renderUpdates() {
@@ -680,7 +771,7 @@ async function saveProject() {
 
 function showToast(msg,type){const t=document.createElement('div');t.className=`toast ${type||''}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
 
-/* ---- CRONOGRAMA ---- */
+/* ---- CRONOGRAMA / IMPORTAÇÃO ODS ---- */
 async function importCronograma(input) {
   const file = input.files[0];
   if (!file) return;
@@ -690,12 +781,38 @@ async function importCronograma(input) {
     const xml = await zip.file('content.xml').async('string');
     const etapas = parseOdsCronograma(xml);
     if (!etapas.length) { showToast('Nenhuma etapa encontrada no cronograma', 'error'); return; }
-    if (!currentProject.cronograma) currentProject.cronograma = {};
-    currentProject.cronograma.etapas = etapas;
-    currentProject.cronograma.importadoEm = new Date().toISOString().split('T')[0];
-    currentProject.cronograma.nomeArquivo = file.name;
-    renderCronograma();
-    showToast(`✅ ${etapas.reduce((s,e)=>s+e.items.length,0)} atividades importadas de ${etapas.length} etapas`, 'success');
+    const totalItems = etapas.reduce((s, e) => s + e.items.length, 0);
+    if (currentProject.actions && currentProject.actions.length > 0) {
+      if (!confirm(`Este projeto já tem ${currentProject.actions.length} ação(ões). Deseja substituir tudo pelas ${totalItems} atividades do ODS importado?`)) {
+        input.value = '';
+        return;
+      }
+    }
+    // Build actions from etapas
+    const newActions = [];
+    etapas.forEach(etapa => {
+      const etapaLabel = `${etapa.id} — ${etapa.nome}`;
+      etapa.items.forEach(item => {
+        newActions.push({
+          id: 'a' + Date.now() + Math.random().toString(36).slice(2, 7),
+          etapa: etapaLabel,
+          num: item.num,
+          title: item.title,
+          resp: item.resp,
+          dias: item.dias,
+          inicio: item.inicio,
+          fim: item.fim,
+          // legacy compat
+          dueDate: item.fim,
+          assignee: undefined,
+          status: 'Pendente'
+        });
+      });
+    });
+    currentProject.actions = newActions;
+    renderActions();
+    populateEtapaSelect();
+    showToast(`✅ ${totalItems} atividades importadas de ${etapas.length} etapas`, 'success');
   } catch(e) {
     showToast('Erro ao importar: ' + e.message, 'error');
   }
@@ -757,54 +874,6 @@ function normalizeDate(s) {
   if (!m) return null;
   const y = m[3].length === 2 ? '20' + m[3] : m[3];
   return `${y}-${m[2]}-${m[1]}`;
-}
-
-function renderCronograma() {
-  const el = document.getElementById('cronogramaView');
-  if (!el) return;
-  const crono = currentProject && currentProject.cronograma;
-  if (!crono || !crono.etapas || !crono.etapas.length) {
-    el.innerHTML = '<div class="crono-empty">Nenhum cronograma importado. Use "Importar ODS" para carregar o arquivo de cronograma do projeto.</div>';
-    return;
-  }
-  const todayStr = new Date().toISOString().split('T')[0];
-  let html = `<div style="font-size:11px;color:var(--text2);margin-bottom:12px">📁 ${crono.nomeArquivo||'cronograma'} · importado em ${fmt(crono.importadoEm)}</div>`;
-  crono.etapas.forEach(etapa => {
-    html += `<div class="crono-etapa"><div class="crono-etapa-title">${etapa.id} — ${etapa.nome}</div>`;
-    etapa.items.forEach(item => {
-      const done = item.status === 'Concluída';
-      const late = !done && item.fim && item.fim < todayStr;
-      const statusIcon = done ? '<span class="crono-status-done">✓</span>' : late ? '<span class="crono-status-late">⚠</span>' : '<span class="crono-status-ok">○</span>';
-      // Progress bar based on dates
-      let pct = 0;
-      if (item.inicio && item.fim) {
-        const start = new Date(item.inicio), end = new Date(item.fim), now = new Date();
-        const total = end - start;
-        const elapsed = Math.min(now - start, total);
-        pct = total > 0 ? Math.max(0, Math.min(100, Math.round(elapsed/total*100))) : 0;
-      }
-      html += `<div class="crono-item" onclick="toggleCronoItem('${etapa.id}','${item.num}')" style="cursor:pointer">
-        ${statusIcon}
-        <span class="crono-num">${item.num}</span>
-        <span class="crono-title" style="${done?'text-decoration:line-through;color:var(--text2)':''}">${item.title}</span>
-        <span class="crono-resp">${item.resp||'—'}</span>
-        <span class="crono-dates">${fmt(item.inicio)} → ${fmt(item.fim)}</span>
-        <div class="crono-bar-wrap"><div class="crono-bar" style="width:${pct}%;background:${done?'var(--green)':late?'var(--red)':'var(--accent)'}"></div></div>
-      </div>`;
-    });
-    html += '</div>';
-  });
-  el.innerHTML = html;
-}
-
-function toggleCronoItem(etapaId, num) {
-  if (!currentProject || !currentProject.cronograma) return;
-  const etapa = currentProject.cronograma.etapas.find(e => e.id === etapaId);
-  if (!etapa) return;
-  const item = etapa.items.find(i => i.num === num);
-  if (!item) return;
-  item.status = item.status === 'Concluída' ? 'Pendente' : 'Concluída';
-  renderCronograma();
 }
 
 load();
