@@ -366,21 +366,34 @@ function setSyncState(state, label) {
   lbl.textContent = label;
 }
 
-async function load() {
+async function load(retries = 3) {
   setSyncState('syncing', 'carregando...');
-  try {
-    const r = await fetch('/api/projects');
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const { projects: data } = await r.json();
-    projects = Array.isArray(data) && data.length > 0 ? data : [];
-    setSyncState('synced', 'sincronizado');
-  } catch(e) {
-    setSyncState('error', 'erro ao carregar');
-    showToast('Erro ao carregar projetos: ' + e.message, 'error');
-    projects = [];
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const r = await fetch('/api/projects', { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const body = await r.json();
+      const data = body.projects || body;
+      projects = Array.isArray(data) && data.length > 0 ? data : [];
+      setSyncState('synced', 'sincronizado');
+      renderDashboard();
+      renderTable();
+      return;
+    } catch(e) {
+      if (attempt < retries) {
+        setSyncState('syncing', `tentativa ${attempt+1}...`);
+        await new Promise(res => setTimeout(res, 1500 * attempt));
+      } else {
+        setSyncState('error', 'erro ao carregar — clique para tentar novamente');
+        document.getElementById('syncLabel').style.cursor = 'pointer';
+        document.getElementById('syncLabel').onclick = () => load();
+        showToast('Erro: ' + e.message, 'error');
+        projects = [];
+        renderDashboard();
+        renderTable();
+      }
+    }
   }
-  renderDashboard();
-  renderTable();
 }
 
 async function save() {
