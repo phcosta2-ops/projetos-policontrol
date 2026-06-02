@@ -170,6 +170,22 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
 .empty { text-align: center; padding: 60px; color: var(--text2); }
 .loading { text-align: center; padding: 80px; color: var(--text2); font-size: 15px; }
+/* CRONOGRAMA */
+.crono-etapa { margin-bottom: 14px; }
+.crono-etapa-title { font-size: 12px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.5px; margin-bottom: 6px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.crono-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+.crono-item:last-child { border-bottom: none; }
+.crono-num { width: 32px; font-size: 11px; color: var(--text2); font-family: monospace; flex-shrink: 0; }
+.crono-title { flex: 1; }
+.crono-resp { font-size: 11px; color: var(--text2); background: #f1f5f9; border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
+.crono-dates { font-size: 11px; color: var(--text2); white-space: nowrap; }
+.crono-bar-wrap { width: 80px; background: var(--bg); border-radius: 3px; height: 6px; flex-shrink: 0; overflow: hidden; }
+.crono-bar { height: 100%; border-radius: 3px; background: var(--accent); }
+.crono-status-done { color: var(--green); font-size: 12px; }
+.crono-status-late { color: var(--red); font-size: 12px; }
+.crono-status-ok { color: var(--text2); font-size: 12px; }
+.crono-empty { color: var(--text2); font-size: 13px; padding: 12px 0; }
+
 .toast { position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: 13px; z-index: 999; animation: toastIn 0.2s ease; box-shadow: 0 8px 32px rgba(0,0,0,.12); font-weight: 600; }
 .toast.success { border-color: var(--green); color: #16a34a; }
 .toast.error { border-color: var(--red); color: var(--red); }
@@ -272,7 +288,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
         </select></div>
       <div class="modal-field"><label>Fase</label>
         <select id="editPhase">
-          <option>Ideação</option><option>Desenvolvimento</option><option>Testes</option><option>Validação</option><option>Lançamento</option>
+          <option>Ideação</option><option>Desenvolvimento</option><option>Testes</option><option>Validação</option><option>Lote Piloto</option><option>Lançamento</option><option>Concluído</option>
         </select></div>
       <div class="modal-field"><label>Previsão Final</label><input type="date" id="editPrevisao"></div>
       <div class="modal-field"><label>Área</label>
@@ -308,6 +324,18 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
         <button class="btn btn-primary btn-sm" onclick="addAction()">Adicionar</button>
       </div>
     </div>
+    <!-- CRONOGRAMA -->
+    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
+      <div class="section-hdr" style="margin-bottom:10px">
+        📅 Cronograma
+        <label class="btn btn-outline btn-sm" style="cursor:pointer;margin-left:8px">
+          ⬆ Importar ODS
+          <input type="file" id="cronogramaFile" accept=".ods" style="display:none" onchange="importCronograma(this)">
+        </label>
+      </div>
+      <div id="cronogramaView"></div>
+    </div>
+
     <div class="update-section">
       <div class="section-hdr" style="margin-bottom:8px">Registrar Atualização</div>
       <textarea class="update-input" id="updateInput" placeholder="O que aconteceu? Decisões, bloqueios, progresso..."></textarea>
@@ -319,6 +347,8 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     </div>
   </div>
 </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <script>
 const OWNERS = { raphael:'Raphael Costa', rodrigo:'Rodrigo Costa', luciana:'Luciana Lima', teresa:'Teresa Costa', marcelo:'Marcelo Câmara' };
@@ -561,7 +591,7 @@ function openProject(id) {
   document.getElementById('editPrevisao').value=p.previsaoFinal||'';
   document.getElementById('updateInput').value='';
   document.getElementById('newActionOwner').value=p.owner;
-  renderActions(); renderUpdates();
+  renderActions(); renderUpdates(); renderCronograma();
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -636,6 +666,133 @@ async function saveProject() {
 }
 
 function showToast(msg,type){const t=document.createElement('div');t.className=`toast ${type||''}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
+
+/* ---- CRONOGRAMA ---- */
+async function importCronograma(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const buf = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(buf);
+    const xml = await zip.file('content.xml').async('string');
+    const etapas = parseOdsCronograma(xml);
+    if (!etapas.length) { showToast('Nenhuma etapa encontrada no cronograma', 'error'); return; }
+    if (!currentProject.cronograma) currentProject.cronograma = {};
+    currentProject.cronograma.etapas = etapas;
+    currentProject.cronograma.importadoEm = new Date().toISOString().split('T')[0];
+    currentProject.cronograma.nomeArquivo = file.name;
+    renderCronograma();
+    showToast(`✅ ${etapas.reduce((s,e)=>s+e.items.length,0)} atividades importadas de ${etapas.length} etapas`, 'success');
+  } catch(e) {
+    showToast('Erro ao importar: ' + e.message, 'error');
+  }
+  input.value = '';
+}
+
+function parseOdsCronograma(xml) {
+  // Extract all text:p content
+  const texts = [];
+  const re = /<text:p[^>]*>([^<]*)<\/text:p>/g;
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    if (m[1].trim()) texts.push(m[1].trim());
+  }
+
+  const etapas = [];
+  let currentEtapa = null;
+  let i = 0;
+  // Skip header rows until we hit ETAPA 1
+  while (i < texts.length && !texts[i].match(/^ETAPA\s+\d+$/i)) i++;
+
+  while (i < texts.length) {
+    const t = texts[i];
+    if (t.match(/^ETAPA\s+\d+$/i)) {
+      const nome = texts[i+1] || t;
+      currentEtapa = { id: t, nome: nome.replace(/^ETAPA\s+\d+\s*/i,'') || nome, items: [] };
+      etapas.push(currentEtapa);
+      i += 2;
+      continue;
+    }
+    // Check if it's an activity number like "1.1", "2.3", etc.
+    if (t.match(/^\d+\.\d+$/) && currentEtapa) {
+      const num = t;
+      const title = texts[i+1] || '';
+      const resp = texts[i+2] || '';
+      const dias = texts[i+3] || '';
+      const inicio = texts[i+4] || '';
+      const fim = texts[i+5] || '';
+      // Validate: resp should not look like a number or date
+      if (title && !title.match(/^\d/) && resp && !resp.match(/^\d{2}\/\d{2}/)) {
+        currentEtapa.items.push({ num, title: decodeOdsText(title), resp: decodeOdsText(resp), dias, inicio: normalizeDate(inicio), fim: normalizeDate(fim), status: 'Pendente' });
+        i += 6;
+        continue;
+      }
+    }
+    i++;
+  }
+  return etapas.filter(e => e.items.length > 0);
+}
+
+function decodeOdsText(t) {
+  return t.replace(/\uFFFD/g,'').replace(/&#\d+;/g,'').trim();
+}
+
+function normalizeDate(s) {
+  if (!s) return null;
+  // Format: DD/MM/YY or DD/MM/YYYY
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+  if (!m) return null;
+  const y = m[3].length === 2 ? '20' + m[3] : m[3];
+  return `${y}-${m[2]}-${m[1]}`;
+}
+
+function renderCronograma() {
+  const el = document.getElementById('cronogramaView');
+  if (!el) return;
+  const crono = currentProject && currentProject.cronograma;
+  if (!crono || !crono.etapas || !crono.etapas.length) {
+    el.innerHTML = '<div class="crono-empty">Nenhum cronograma importado. Use "Importar ODS" para carregar o arquivo de cronograma do projeto.</div>';
+    return;
+  }
+  const todayStr = new Date().toISOString().split('T')[0];
+  let html = `<div style="font-size:11px;color:var(--text2);margin-bottom:12px">📁 ${crono.nomeArquivo||'cronograma'} · importado em ${fmt(crono.importadoEm)}</div>`;
+  crono.etapas.forEach(etapa => {
+    html += `<div class="crono-etapa"><div class="crono-etapa-title">${etapa.id} — ${etapa.nome}</div>`;
+    etapa.items.forEach(item => {
+      const done = item.status === 'Concluída';
+      const late = !done && item.fim && item.fim < todayStr;
+      const statusIcon = done ? '<span class="crono-status-done">✓</span>' : late ? '<span class="crono-status-late">⚠</span>' : '<span class="crono-status-ok">○</span>';
+      // Progress bar based on dates
+      let pct = 0;
+      if (item.inicio && item.fim) {
+        const start = new Date(item.inicio), end = new Date(item.fim), now = new Date();
+        const total = end - start;
+        const elapsed = Math.min(now - start, total);
+        pct = total > 0 ? Math.max(0, Math.min(100, Math.round(elapsed/total*100))) : 0;
+      }
+      html += `<div class="crono-item" onclick="toggleCronoItem('${etapa.id}','${item.num}')" style="cursor:pointer">
+        ${statusIcon}
+        <span class="crono-num">${item.num}</span>
+        <span class="crono-title" style="${done?'text-decoration:line-through;color:var(--text2)':''}">${item.title}</span>
+        <span class="crono-resp">${item.resp||'—'}</span>
+        <span class="crono-dates">${fmt(item.inicio)} → ${fmt(item.fim)}</span>
+        <div class="crono-bar-wrap"><div class="crono-bar" style="width:${pct}%;background:${done?'var(--green)':late?'var(--red)':'var(--accent)'}"></div></div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function toggleCronoItem(etapaId, num) {
+  if (!currentProject || !currentProject.cronograma) return;
+  const etapa = currentProject.cronograma.etapas.find(e => e.id === etapaId);
+  if (!etapa) return;
+  const item = etapa.items.find(i => i.num === num);
+  if (!item) return;
+  item.status = item.status === 'Concluída' ? 'Pendente' : 'Concluída';
+  renderCronograma();
+}
 
 load();
 </script>
