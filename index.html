@@ -305,7 +305,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     <div class="modal-badges" id="modalBadges"></div>
     <div class="modal-grid">
       <div class="modal-field"><label>Status</label>
-        <select id="editStatus">
+        <select id="editStatus" onchange="markDirty()">
           <option value="No prazo">✅ No prazo</option>
           <option value="Atrasado">🔴 Atrasado</option>
           <option value="Em risco">⚠️ Em risco</option>
@@ -428,6 +428,7 @@ async function save() {
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     setSyncState('synced', 'salvo ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}));
+    showToast('✅ Projeto salvo no servidor!','success');
   } catch(e) {
     setSyncState('error', 'erro ao salvar');
     showToast('Erro ao salvar: ' + e.message, 'error');
@@ -645,6 +646,7 @@ function openProject(id) {
   document.getElementById('editTipo').value=p.tipo;
   document.getElementById('editPrevisao').value=p.previsaoFinal||'';
   document.getElementById('updateInput').value='';
+  _dirty = false;
   renderActions(); renderUpdates(); populateEtapaSelect();
   document.getElementById('modalOverlay').classList.add('open');
 }
@@ -658,6 +660,20 @@ function openNewProject() {
 
 function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); currentProject=null; }
 function closeModalOnOverlay(e) { if(e.target===document.getElementById('modalOverlay'))closeModal(); }
+
+let _dirty = false;
+function markDirty() {
+  _dirty = true;
+  const btn = document.querySelector('.modal-footer .btn-primary');
+  if (btn) btn.style.animation = 'pulse 1s infinite';
+  const lbl = document.getElementById('modalCode');
+  if (lbl && !lbl.textContent.includes('*')) lbl.textContent += ' ⚠ alterações não salvas';
+}
+function clearDirty() {
+  _dirty = false;
+  const btn = document.querySelector('.modal-footer .btn-primary');
+  if (btn) btn.style.animation = '';
+}
 
 function deleteProject() {
   if (!currentProject) return;
@@ -802,10 +818,10 @@ async function saveProject() {
   const idx=projects.findIndex(x=>x.id===p.id);
   if(idx>=0)projects[idx]=p;
   closeModal();
+  clearDirty();
   renderDashboard();
   renderTable();
   await save();
-  showToast('✅ Projeto salvo!','success');
 }
 
 function showToast(msg,type){const t=document.createElement('div');t.className=`toast ${type||''}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
