@@ -300,7 +300,11 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 <div class="modal-overlay" id="modalOverlay" onclick="closeModalOnOverlay(event)">
   <div class="modal">
     <button class="modal-close" onclick="closeModal()">✕</button>
-    <div class="modal-code" id="modalCode"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <label style="font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap">Código:</label>
+      <input type="text" id="editCode" placeholder="Ex: DNP-001" style="font-family:monospace;font-size:13px;color:var(--text);border:none;border-bottom:1px solid var(--border);outline:none;background:transparent;padding:2px 6px;width:140px" oninput="markDirty()">
+      <span id="dirtyIndicator" style="font-size:11px;color:var(--yellow);font-weight:600;display:none">⚠ alterações não salvas</span>
+    </div>
     <input type="text" id="modalTitle" style="font-size:18px;font-weight:800;border:none;border-bottom:2px solid var(--border);outline:none;width:100%;margin-bottom:10px;padding:4px 0;background:transparent;color:var(--text)" placeholder="Nome do projeto...">
     <div class="modal-badges" id="modalBadges"></div>
     <div class="modal-grid">
@@ -453,8 +457,9 @@ function renderDashboard() {
   let totalA=0, lateA=0;
   projects.forEach(p => {
     counts[p.status]=(counts[p.status]||0)+1;
-    if (!areas[p.area]) areas[p.area]={total:0,atrasado:0,risco:0,prazo:0,parado:0,concluido:0};
+    if (!areas[p.area]) areas[p.area]={total:0,active:0,atrasado:0,risco:0,prazo:0,parado:0,concluido:0};
     areas[p.area].total++;
+    if (p.status!=='Concluído') areas[p.area].active++;
     if (p.status==='Atrasado') areas[p.area].atrasado++;
     else if (p.status==='Em risco') areas[p.area].risco++;
     else if (p.status==='No prazo') areas[p.area].prazo++;
@@ -493,9 +498,9 @@ function renderDashboard() {
     const legend = slices.map(s=>`<div class="legend-item"><div class="legend-dot" style="background:${s.c}"></div><span>${s.l}</span><span class="legend-count">${s.v}</span></div>`).join('');
     return `<div class="dash-card" style="text-align:center">
       <div class="dash-card-title" style="justify-content:center">${areaShort}</div>
-      <div class="dash-card-sub" style="text-align:center">${d.total} projeto(s) ativo(s)</div>
+      <div class="dash-card-sub" style="text-align:center">${d.active} em andamento · ${d.total} total</div>
       <div class="donut-wrap"><svg viewBox="0 0 120 120" width="120" height="120">${paths}</svg>
-        <div class="donut-center"><span class="donut-big">${d.total}</span><span class="donut-small">projetos</span></div></div>
+        <div class="donut-center"><span class="donut-big">${d.active}</span><span class="donut-small">andamento</span></div></div>
       <div class="donut-legend">${legend}</div>
     </div>`;
   }).join('');
@@ -505,6 +510,7 @@ function renderDashboard() {
   const dotColors = {'No prazo':'#3b82f6','Atrasado':'#f97316','Em risco':'#f59e0b','Parado':'#d1d5db','Concluído':'#22c55e'};
   document.getElementById('metasGrid').innerHTML = metaAreas.map(area => {
     const aPs = projects.filter(p=>p.area===area);
+    const aActivePs = aPs.filter(p=>p.status!=='Concluído');
     const tipos = ['Novo Produto','Melhoria / Red. Custo'];
     const rows = tipos.map(tipo => {
       const tPs = aPs.filter(p=>p.tipo===tipo);
@@ -521,7 +527,7 @@ function renderDashboard() {
     const dots = aPs.map(p=>`<div class="meta-dot" title="${p.name}" style="background:${dotColors[p.status]||'#d1d5db'}"></div>`).join('');
     return `<div class="meta-area-card">
       <div class="meta-area-title">${areaIcons[area]||''} ${area.replace('Des. ','')}</div>
-      <div class="meta-area-sub">${aPs.length} projeto(s) ativo(s)</div>
+      <div class="meta-area-sub">${aActivePs.length} em andamento · ${aPs.length} total</div>
       ${rows}
       <div class="meta-dots">${dots}</div>
     </div>`;
@@ -636,7 +642,7 @@ function openProject(id) {
   currentProject = JSON.parse(JSON.stringify(projects.find(p=>p.id===id)));
   if (!currentProject) return;
   const p=currentProject;
-  document.getElementById('modalCode').textContent=p.code||p.id;
+  document.getElementById('editCode').value=p.code||'';
   document.getElementById('modalTitle').value=p.name;
   document.getElementById('modalBadges').innerHTML=statusBadge(p.status)+` <span class="badge badge-area">${p.area}</span> <span class="badge badge-phase">${p.phase}</span>`;
   document.getElementById('editStatus').value=p.status;
@@ -666,13 +672,15 @@ function markDirty() {
   _dirty = true;
   const btn = document.querySelector('.modal-footer .btn-primary');
   if (btn) btn.style.animation = 'pulse 1s infinite';
-  const lbl = document.getElementById('modalCode');
-  if (lbl && !lbl.textContent.includes('*')) lbl.textContent += ' ⚠ alterações não salvas';
+  const ind = document.getElementById('dirtyIndicator');
+  if (ind) ind.style.display = '';
 }
 function clearDirty() {
   _dirty = false;
   const btn = document.querySelector('.modal-footer .btn-primary');
   if (btn) btn.style.animation = '';
+  const ind = document.getElementById('dirtyIndicator');
+  if (ind) ind.style.display = 'none';
 }
 
 function deleteProject() {
@@ -806,6 +814,7 @@ async function saveProject() {
   if(!currentProject)return;
   const p=currentProject;
   p.name=document.getElementById('modalTitle').value.trim()||p.name;
+  p.code=document.getElementById('editCode').value.trim();
   p.status=document.getElementById('editStatus').value;
   p.phase=document.getElementById('editPhase').value;
   p.area=document.getElementById('editArea').value;
