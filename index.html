@@ -258,7 +258,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     </div>
     <div class="dash-card">
       <div class="dash-card-title">📐 Deslocamento dos Projetos</div>
-      <div class="dash-card-sub">Dias de atraso além da data prevista (0 = no prazo)</div>
+      <div class="dash-card-sub">Média do desvio (Prazo Reprogramado − Previsão Inicial) ÷ total de projetos abertos</div>
       <div class="desl-grid" id="deslocGrid"></div>
     </div>
   </div>
@@ -337,6 +337,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
         <select id="editTipo">
           <option>Novo Produto</option><option>Melhoria / Red. Custo</option><option>Contratado</option><option>Outro</option>
         </select></div>
+      <div class="modal-field"><label>Previsão Inicial</label><input type="date" id="editPrevisaoInicial" title="Data original planejada (antes de qualquer reprogramação) — usada para calcular o Descolamento"></div>
     </div>
     <div>
       <div class="section-hdr">
@@ -537,25 +538,36 @@ function renderDashboard() {
   const contAtrasados = contratados.filter(p=>p.status==='Atrasado').length;
   document.getElementById('contratadoLine').innerHTML = `<strong>🟡 Contratado:</strong> ${contratados.length} projeto(s) ativo(s) — ${contAtrasados} atrasado(s)`;
 
+    // Descolamento = formula planilha FORM DES 012:
+  // soma de max(0, previsaoFinal - previsaoInicial) em dias / total projetos abertos
+  const calcDesl = ps => {
+    const open = ps.filter(p=>p.status!=='Concluído');
+    if (!open.length) return {avg:0, openCount:0, devCount:0};
+    let sumDev=0, devCount=0;
+    open.forEach(p=>{
+      if(p.previsaoInicial && p.previsaoFinal){
+        const dev=Math.floor((new Date(p.previsaoFinal)-new Date(p.previsaoInicial))/86400000);
+        if(dev>0){sumDev+=dev; devCount++;}
+      }
+    });
+    return {avg:Math.round(sumDev/open.length), openCount:open.length, devCount};
+  };
   const desAreas = ['Des. Industrial','Des. Químico','Contratado'];
   const desCards = desAreas.map(area => {
-    const aPs = projects.filter(p=>p.area===area && p.previsaoFinal && p.status!=='Concluído');
-    const latePs = aPs.filter(p=>projDaysLate(p)>0);
-    const avg = latePs.length ? Math.round(latePs.reduce((s,p)=>s+projDaysLate(p),0)/latePs.length) : 0;
-    const concExcl = projects.filter(p=>p.area===area&&p.status==='Concluído').length;
+    const aPs = projects.filter(p=>p.area===area);
+    const d = calcDesl(aPs);
+    const concExcl = aPs.filter(p=>p.status==='Concluído').length;
     return `<div class="desl-item">
       <div class="desl-area">${area.replace('Des. ','')}</div>
-      <div class="desl-days ${avg===0?'ok':''}">${avg}d</div>
-      <div class="desl-sub">${aPs.length} ativo(s) · ${latePs.length} atrasado(s)${concExcl>0?`<br><span style="color:#16a34a">${concExcl} concluído(s) excluído(s)</span>`:''}</div>
+      <div class="desl-days ${d.avg===0?'ok':''}">` + '${d.avg}' + `d</div>
+      <div class="desl-sub">${d.openCount} aberto(s) · ${d.devCount} com desvio${concExcl>0?`<br><span style="color:#16a34a">${concExcl} concluído(s)</span>`:''}</div>
     </div>`;
   });
-  const allLate = projects.filter(p=>p.previsaoFinal&&p.status!=='Concluído'&&projDaysLate(p)>0);
-  const geral = allLate.length ? Math.round(allLate.reduce((s,p)=>s+projDaysLate(p),0)/allLate.length) : 0;
-  const totConcl = projects.filter(p=>p.status==='Concluído').length;
+  const dGeral = calcDesl(projects);
   desCards.push(`<div class="desl-item highlight">
     <div class="desl-area">GERAL</div>
-    <div class="desl-days">${geral}d</div>
-    <div class="desl-sub">média (atrasados)${totConcl>0?`<br><span style="color:#16a34a">${totConcl} concluído(s) excluído(s)</span>`:''}</div>
+    <div class="desl-days">${dGeral.avg}d</div>
+    <div class="desl-sub">${dGeral.openCount} aberto(s) · ${dGeral.devCount} com desvio</div>
   </div>`);
   document.getElementById('deslocGrid').innerHTML = desCards.join('');
 
@@ -651,6 +663,7 @@ function openProject(id) {
   document.getElementById('editOwner').value=p.owner;
   document.getElementById('editTipo').value=p.tipo;
   document.getElementById('editPrevisao').value=p.previsaoFinal||'';
+  document.getElementById('editPrevisaoInicial').value=p.previsaoInicial||'';
   document.getElementById('updateInput').value='';
   _dirty = false;
   renderActions(); renderUpdates(); populateEtapaSelect();
@@ -821,6 +834,7 @@ async function saveProject() {
   p.owner=document.getElementById('editOwner').value;
   p.tipo=document.getElementById('editTipo').value;
   p.previsaoFinal=document.getElementById('editPrevisao').value||null;
+  p.previsaoInicial=document.getElementById('editPrevisaoInicial').value||null;
   const txt=document.getElementById('updateInput').value.trim();
   if(txt){if(!p.updates)p.updates=[];p.updates.push({date:new Date().toISOString().split('T')[0],text:txt,author:OWNERS[p.owner]||p.owner});}
   p.dataAtualizacao=new Date().toISOString().split('T')[0];
