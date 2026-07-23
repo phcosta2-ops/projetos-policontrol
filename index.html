@@ -243,6 +243,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 <div class="nav-tabs">
   <div class="nav-tab active" onclick="switchView('dashboard')">📊 Dashboard</div>
   <div class="nav-tab" onclick="switchView('list')">📋 Projetos</div>
+  <div class="nav-tab" onclick="switchView('myactions')">👤 Minhas Ações</div>
 </div>
 
 <!-- DASHBOARD VIEW -->
@@ -294,6 +295,17 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openNewProject()">+ Novo Projeto</button>
   </div>
   <div id="projectsContainer"><div class="loading">⏳ Carregando...</div></div>
+</div>
+
+<!-- MINHAS AÇÕES VIEW -->
+<div class="view" id="view-myactions">
+  <div class="table-filters">
+    <label style="font-size:13px;font-weight:600;color:var(--text2)">Pessoa:</label>
+    <select id="myActionsPerson" class="search-input" style="width:220px" onchange="renderMyActions()">
+      <option value="">— Selecione —</option>
+    </select>
+  </div>
+  <div id="myActionsList"><div class="empty">👆 Selecione uma pessoa para ver as ações dela.</div></div>
 </div>
 
 <!-- MODAL -->
@@ -353,9 +365,14 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
           <option value="">— Etapa —</option>
         </select>
         <input type="text" id="newEtapaName" class="inp-etapa" placeholder="Nome da nova etapa..." style="display:none">
+        <select id="newActionParent" class="inp-etapa" title="Sub-item de (opcional)">
+          <option value="">— Atividade principal —</option>
+        </select>
         <input type="text" id="newActionNum" class="inp-num" placeholder="Num (ex: 1.1)">
         <input type="text" id="newActionTitle" class="inp-title" placeholder="Título da atividade..." onkeydown="if(event.key==='Enter') addAction()">
-        <input type="text" id="newActionResp" class="inp-resp" placeholder="Responsável">
+        <select id="newActionResp" class="inp-resp">
+          <option value="">— Responsável —</option>
+        </select>
         <input type="date" id="newActionInicio" class="inp-date">
         <input type="date" id="newActionFim" class="inp-date">
         <button class="btn btn-primary btn-sm" onclick="addAction()">+ Adicionar</button>
@@ -450,7 +467,9 @@ function switchView(v) {
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
-  document.querySelectorAll('.nav-tab')[v==='dashboard'?0:1].classList.add('active');
+  const idx = {dashboard:0, list:1, myactions:2}[v] ?? 0;
+  document.querySelectorAll('.nav-tab')[idx].classList.add('active');
+  if (v === 'myactions') { populateMyActionsPersonSelect(); renderMyActions(); }
 }
 
 function renderDashboard() {
@@ -666,7 +685,7 @@ function openProject(id) {
   document.getElementById('editPrevisaoInicial').value=p.previsaoInicial||'';
   document.getElementById('updateInput').value='';
   _dirty = false;
-  renderActions(); renderUpdates(); populateEtapaSelect();
+  renderActions(); renderUpdates(); populateEtapaSelect(); populateParentSelect(); populateActionRespSelect();
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -710,6 +729,24 @@ Esta ação não pode ser desfeita.`)) return;
   showToast('🗑 Projeto excluído.', 'success');
 }
 
+function numSortKey(numStr) {
+  if (!numStr) return [Infinity];
+  return String(numStr).split('.').map(n => parseInt(n,10)).map(n => isNaN(n) ? 0 : n);
+}
+function compareNum(a, b) {
+  const ka = numSortKey(a.num), kb = numSortKey(b.num);
+  const len = Math.max(ka.length, kb.length);
+  for (let i=0;i<len;i++){
+    const va = ka[i] ?? 0, vb = kb[i] ?? 0;
+    if (va !== vb) return va - vb;
+  }
+  return 0;
+}
+
+function respLabel(a) {
+  return (a.respKey && OWNERS[a.respKey]) || a.resp || (a.assignee ? (OWNERS[a.assignee] || a.assignee) : null) || '—';
+}
+
 function renderActions() {
   const list = document.getElementById('actionsList');
   if (!currentProject.actions || !currentProject.actions.length) {
@@ -728,11 +765,22 @@ function renderActions() {
   let html = '';
   groupOrder.forEach(grp => {
     html += `<div class="etapa-group"><div class="etapa-header">${grp}</div>`;
-    groups[grp].forEach(({ a, i }) => {
-      // Support legacy dueDate/assignee fields
+    const items = groups[grp];
+    const byId = {};
+    items.forEach(it => { if (it.a.id) byId[it.a.id] = it; });
+    const topLevel = items.filter(it => !it.a.parentId || !byId[it.a.parentId]);
+    const childrenOf = {};
+    items.forEach(it => {
+      if (it.a.parentId && byId[it.a.parentId]) {
+        (childrenOf[it.a.parentId] = childrenOf[it.a.parentId] || []).push(it);
+      }
+    });
+    topLevel.sort((x,y)=>compareNum(x.a, y.a));
+    const renderItem = (it, depth) => {
+      const { a, i } = it;
       const fimDate = a.fim || a.dueDate || null;
       const inicioDate = a.inicio || null;
-      const resp = a.resp || (a.assignee ? (OWNERS[a.assignee] || a.assignee) : '—');
+      const resp = respLabel(a);
       const done = ['Concluída', 'Cancelada'].includes(a.status);
       const late = !done && fimDate && fimDate < todayStr;
       const lateDays = late ? daysLate(fimDate) : 0;
@@ -740,7 +788,8 @@ function renderActions() {
         ? `${inicioDate ? fmt(inicioDate) : '—'} → ${fimDate ? fmt(fimDate) : '—'}`
         : '';
       const diasStr = a.dias ? `${a.dias}d` : '';
-      html += `<div class="action-row-crono ${late ? 'late' : ''} ${done ? 'done' : ''}">
+      html += `<div class="action-row-crono ${late ? 'late' : ''} ${done ? 'done' : ''}" style="margin-left:${depth*22}px">
+        ${depth>0 ? '<span style="color:var(--text2);font-size:12px;flex-shrink:0">↳</span>' : ''}
         <div class="action-check ${done ? 'checked' : ''}" onclick="toggleAction(${i})"></div>
         ${a.num ? `<span class="action-num">${a.num}</span>` : ''}
         <span class="action-row-title">${a.title}</span>
@@ -750,15 +799,51 @@ function renderActions() {
         ${late ? `<span class="action-late-crono">⚠ ${lateDays}d atraso</span>` : ''}
         <button class="action-delete" onclick="deleteAction(${i})">✕</button>
       </div>`;
-    });
+      const kids = (childrenOf[a.id]||[]).slice().sort((x,y)=>compareNum(x.a,y.a));
+      kids.forEach(k => renderItem(k, depth+1));
+    };
+    topLevel.forEach(it => renderItem(it, 0));
     html += '</div>';
   });
   list.innerHTML = html;
 }
 
 function toggleAction(i) { currentProject.actions[i].status=['Concluída','Cancelada'].includes(currentProject.actions[i].status)?'Pendente':'Concluída'; renderActions(); }
-function deleteAction(i) { currentProject.actions.splice(i,1); renderActions(); populateEtapaSelect(); }
+function deleteAction(i) {
+  const removed = currentProject.actions[i];
+  if (!removed) return;
+  if (!removed.id) { currentProject.actions.splice(i,1); renderActions(); populateEtapaSelect(); populateParentSelect(); return; }
+  const idsToRemove = new Set([removed.id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    currentProject.actions.forEach(a => {
+      if (a.parentId && idsToRemove.has(a.parentId) && a.id && !idsToRemove.has(a.id)) {
+        idsToRemove.add(a.id);
+        changed = true;
+      }
+    });
+  }
+  currentProject.actions = currentProject.actions.filter(a => !(a.id && idsToRemove.has(a.id)));
+  renderActions();
+  populateEtapaSelect();
+  populateParentSelect();
+}
 function focusAddAction() { document.getElementById('newActionTitle').focus(); }
+
+function populateParentSelect() {
+  const sel = document.getElementById('newActionParent');
+  if (!sel || !currentProject) return;
+  const opts = (currentProject.actions||[]).map(a => `<option value="${a.id}">${a.num?a.num+' — ':''}${(a.title||'').replace(/"/g,'&quot;').substring(0,45)}</option>`).join('');
+  sel.innerHTML = '<option value="">— Atividade principal —</option>' + opts;
+}
+
+function populateActionRespSelect() {
+  const sel = document.getElementById('newActionResp');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Responsável —</option>' +
+    Object.entries(OWNERS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+}
 
 function populateEtapaSelect() {
   const sel = document.getElementById('newActionEtapa');
@@ -790,15 +875,18 @@ function addAction() {
     etapa = etapaSel || '';
   }
   const num = document.getElementById('newActionNum').value.trim() || '';
-  const resp = document.getElementById('newActionResp').value.trim() || '';
+  const respKey = document.getElementById('newActionResp').value || '';
+  const parentId = document.getElementById('newActionParent').value || undefined;
   const inicio = document.getElementById('newActionInicio').value || null;
   const fim = document.getElementById('newActionFim').value || null;
   currentProject.actions.push({
-    id: 'a' + Date.now(),
+    id: 'a' + Date.now() + Math.random().toString(36).slice(2,6),
     etapa: etapa || undefined,
     num: num || undefined,
     title,
-    resp: resp || undefined,
+    respKey: respKey || undefined,
+    resp: respKey ? OWNERS[respKey] : undefined,
+    parentId,
     dias: (inicio && fim) ? String(Math.max(1, Math.round((new Date(fim)-new Date(inicio))/86400000))) : undefined,
     inicio,
     fim,
@@ -810,12 +898,14 @@ function addAction() {
   document.getElementById('newActionTitle').value = '';
   document.getElementById('newActionNum').value = '';
   document.getElementById('newActionResp').value = '';
+  document.getElementById('newActionParent').value = '';
   document.getElementById('newActionInicio').value = '';
   document.getElementById('newActionFim').value = '';
   document.getElementById('newEtapaName').value = '';
   document.getElementById('newEtapaName').style.display = 'none';
   renderActions();
   populateEtapaSelect();
+  populateParentSelect();
 }
 
 function renderUpdates() {
@@ -848,6 +938,62 @@ async function saveProject() {
 }
 
 function showToast(msg,type){const t=document.createElement('div');t.className=`toast ${type||''}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
+
+/* ---- MINHAS AÇÕES ---- */
+function populateMyActionsPersonSelect() {
+  const sel = document.getElementById('myActionsPerson');
+  if (!sel || sel.options.length > 1) return;
+  sel.innerHTML = '<option value="">— Selecione —</option>' +
+    Object.entries(OWNERS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+}
+
+function matchesOwner(a, key) {
+  if (!key) return false;
+  if (a.respKey === key) return true;
+  if (a.assignee === key) return true;
+  const name = OWNERS[key];
+  if (!name) return false;
+  const firstName = name.split(' ')[0].toLowerCase();
+  if (a.resp && a.resp.toLowerCase().includes(firstName)) return true;
+  return false;
+}
+
+function renderMyActions() {
+  const key = document.getElementById('myActionsPerson').value;
+  const container = document.getElementById('myActionsList');
+  if (!key) { container.innerHTML = '<div class="empty">👆 Selecione uma pessoa para ver as ações dela.</div>'; return; }
+  const todayStr = new Date().toISOString().split('T')[0];
+  const rows = [];
+  projects.forEach(p => {
+    (p.actions||[]).forEach(a => {
+      if (matchesOwner(a, key)) {
+        const done = ['Concluída','Cancelada'].includes(a.status);
+        const fimDate = a.fim || a.dueDate || null;
+        const late = !done && fimDate && fimDate < todayStr;
+        rows.push({ project: p, action: a, done, late, fimDate });
+      }
+    });
+  });
+  if (!rows.length) { container.innerHTML = '<div class="empty">✅ Nenhuma ação mapeada para esta pessoa.</div>'; return; }
+  rows.sort((x,y) => {
+    if (x.late !== y.late) return x.late ? -1 : 1;
+    if (x.done !== y.done) return x.done ? 1 : -1;
+    return (x.fimDate||'9999-99-99') < (y.fimDate||'9999-99-99') ? -1 : 1;
+  });
+  container.innerHTML = `<div class="table-wrap"><table class="projects-table">
+    <thead><tr><th>Projeto</th><th>Etapa</th><th>Atividade</th><th>Prazo</th><th>Situação</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const lateDays = r.late ? daysLate(r.fimDate) : 0;
+      const sit = r.done ? '<span class="badge badge-concluido">✓ Concluída</span>' : r.late ? `<span class="badge badge-atrasado">⚠ ${lateDays}d atraso</span>` : '<span class="badge badge-prazo">No prazo</span>';
+      return `<tr onclick="switchView('list');openProject('${r.project.id}')" style="cursor:pointer">
+        <td style="font-weight:600">${r.project.name}</td>
+        <td><span class="badge badge-phase">${r.action.etapa||'Geral'}</span></td>
+        <td>${r.action.num?`<span class="action-num">${r.action.num}</span> `:''}${r.action.title}</td>
+        <td style="font-size:12px">${fmt(r.fimDate)}</td>
+        <td>${sit}</td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+}
 
 /* ---- CRONOGRAMA / IMPORTAÇÃO ODS ---- */
 async function importCronograma(input) {
