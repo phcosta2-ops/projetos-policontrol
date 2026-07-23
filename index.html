@@ -559,7 +559,7 @@ function renderDashboard() {
     const concExcl = aPs.filter(p=>p.status==='Concluído').length;
     return `<div class="desl-item">
       <div class="desl-area">${area.replace('Des. ','')}</div>
-      <div class="desl-days ${d.avg===0?'ok':''}">` + '${d.avg}' + `d</div>
+      <div class="desl-days ${d.avg===0?'ok':''}">${d.avg}d</div>
       <div class="desl-sub">${d.openCount} aberto(s) · ${d.devCount} com desvio${concExcl>0?`<br><span style="color:#16a34a">${concExcl} concluído(s)</span>`:''}</div>
     </div>`;
   });
