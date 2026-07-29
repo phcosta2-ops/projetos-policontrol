@@ -220,6 +220,16 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .pendencias-chip .pchip-code { font-family:monospace; font-size:10px; color:var(--text2); background:#f1f5f9; padding:1px 5px; border-radius:3px; font-weight:700; }
 .pendencias-chip.done { background:#dcfce7; border-color:#86efac; color:#166534; }
 .pendencias-highlight { animation: pulseFlash 1.4s ease; }
+.ai-suggestion-item { display:flex; align-items:center; gap:10px; background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:8px 12px; margin-bottom:6px; font-size:13px; }
+.ai-suggestion-item.selected { background:#f0fdf4; border-color:#86efac; }
+.ai-suggestion-check { width:18px; height:18px; border-radius:4px; border:2px solid var(--border); cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:#fff; }
+.ai-suggestion-check.checked { background:var(--green); border-color:var(--green); }
+.ai-suggestion-check.checked::after { content:'✓'; color:#fff; font-size:11px; font-weight:800; }
+.ai-suggestion-field { font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.4px; min-width:110px; }
+.ai-suggestion-value { font-weight:600; color:var(--text); flex:1; }
+.ai-suggestion-old { font-size:11px; color:var(--text2); text-decoration:line-through; margin-right:6px; }
+.ai-cronograma-item { background:#fefce8; border:1px solid #fde68a; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; display:flex; align-items:center; gap:8px; }
+.ai-cronograma-item .action-num { font-family:monospace; color:var(--text2); }
 @keyframes pulseFlash { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0)} 30%{box-shadow:0 0 0 4px rgba(245,158,11,0.35)} 60%{box-shadow:0 0 0 6px rgba(245,158,11,0)} }
 
 .compliance-item { display:flex; align-items:center; gap:10px; background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; }
@@ -353,7 +363,10 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
       <span id="dirtyIndicator" style="font-size:11px;color:var(--yellow);font-weight:600;display:none">⚠ alterações não salvas</span>
     </div>
     <input type="text" id="modalTitle" style="font-size:18px;font-weight:800;border:none;border-bottom:2px solid var(--border);outline:none;width:100%;margin-bottom:10px;padding:4px 0;background:transparent;color:var(--text)" placeholder="Nome do projeto...">
-    <div class="modal-badges" id="modalBadges"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div class="modal-badges" id="modalBadges" style="margin:0;flex:1"></div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="openAiAssistant()" style="gap:6px;font-weight:700" title="Preencher campos e cronograma com IA (Gemini)">🤖 Preencher com IA</button>
+    </div>
     <div id="modalPendencias" style="display:none"></div>
     <div class="modal-grid">
       <div class="modal-field"><label>Status</label>
@@ -441,6 +454,48 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
       <button class="btn" style="background:#fee2e2;color:#dc2626;margin-right:auto;border-radius:8px;border:1px solid #fca5a5" onclick="deleteProject()">🗑 Excluir Projeto</button>
       <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveProject()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI ASSISTANT MODAL -->
+<div class="modal-overlay" id="aiModalOverlay" onclick="if(event.target===this)closeAiAssistant()">
+  <div class="modal" style="max-width:640px">
+    <button class="modal-close" onclick="closeAiAssistant()">✕</button>
+    <div class="modal-title" style="font-size:20px;margin-bottom:4px">🤖 Assistente IA</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Cole texto, e-mail, ata de reunião ou anexe foto (whiteboard, TAP em papel, screenshot). A IA sugere preenchimento de campos e cronograma inicial. Você revisa antes de aplicar.</div>
+
+    <div id="aiInputArea">
+      <label style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px">Descreva ou cole o conteúdo</label>
+      <textarea id="aiText" placeholder="Ex: Novo projeto p/ Cliente X desenvolver reagente Cloro Total via cliente da Adriana, prazo Nov/26, responsavel Luciana..." style="width:100%;min-height:120px;margin-top:6px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;outline:none;resize:vertical;font-family:inherit"></textarea>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <label class="btn btn-outline btn-sm" style="cursor:pointer">
+          📎 Anexar imagem (opcional)
+          <input type="file" id="aiImage" accept="image/*" style="display:none" onchange="onAiImageSelected(this)">
+        </label>
+        <span id="aiImageName" style="font-size:12px;color:var(--text2)"></span>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
+        <button class="btn btn-outline" onclick="closeAiAssistant()">Cancelar</button>
+        <button class="btn btn-primary" id="aiRunBtn" onclick="runAiAssistant()">✨ Processar</button>
+      </div>
+    </div>
+
+    <div id="aiLoadingArea" style="display:none;text-align:center;padding:40px 0">
+      <div style="font-size:16px;margin-bottom:8px">⏳ Analisando com IA...</div>
+      <div style="font-size:12px;color:var(--text2)">Pode levar 5-15 segundos</div>
+    </div>
+
+    <div id="aiResultArea" style="display:none">
+      <div id="aiReasoning" style="font-size:12px;color:var(--text2);background:#f0f9ff;border-left:3px solid #3b82f6;padding:8px 12px;margin-bottom:14px;border-radius:6px"></div>
+      <div id="aiSuggestions"></div>
+      <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end;flex-wrap:wrap">
+        <button class="btn btn-outline" onclick="resetAiAssistant()">← Nova descrição</button>
+        <button class="btn btn-outline" onclick="closeAiAssistant()">Descartar</button>
+        <button class="btn btn-primary" onclick="applyAiSuggestions()">✅ Aplicar selecionadas</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1387,6 +1442,283 @@ async function saveProject() {
 }
 
 function showToast(msg,type){const t=document.createElement('div');t.className=`toast ${type||''}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
+
+/* ---- ASSISTENTE IA ---- */
+let _aiResult = null;
+let _aiSelected = {};
+let _aiImageDataUrl = null;
+
+function openAiAssistant() {
+  if (!currentProject) return;
+  resetAiAssistant();
+  document.getElementById('aiModalOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('aiText').focus(), 100);
+}
+function closeAiAssistant() {
+  document.getElementById('aiModalOverlay').classList.remove('open');
+}
+function resetAiAssistant() {
+  _aiResult = null;
+  _aiSelected = {};
+  _aiImageDataUrl = null;
+  document.getElementById('aiText').value = '';
+  document.getElementById('aiImage').value = '';
+  document.getElementById('aiImageName').textContent = '';
+  document.getElementById('aiInputArea').style.display = '';
+  document.getElementById('aiLoadingArea').style.display = 'none';
+  document.getElementById('aiResultArea').style.display = 'none';
+}
+
+function onAiImageSelected(input) {
+  const f = input.files && input.files[0];
+  if (!f) { _aiImageDataUrl = null; document.getElementById('aiImageName').textContent = ''; return; }
+  if (f.size > 4 * 1024 * 1024) { showToast('Imagem muito grande (max 4MB)', 'error'); input.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    _aiImageDataUrl = reader.result;
+    document.getElementById('aiImageName').textContent = f.name;
+  };
+  reader.readAsDataURL(f);
+}
+
+async function runAiAssistant() {
+  const text = document.getElementById('aiText').value.trim();
+  if (!text && !_aiImageDataUrl) { showToast('Descreva ou anexe imagem', 'error'); return; }
+
+  document.getElementById('aiInputArea').style.display = 'none';
+  document.getElementById('aiLoadingArea').style.display = '';
+
+  let imageBase64 = null, imageMimeType = null;
+  if (_aiImageDataUrl) {
+    const m = _aiImageDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (m) { imageMimeType = m[1]; imageBase64 = m[2]; }
+  }
+
+  try {
+    const r = await fetch('/api/ai-fill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        imageBase64,
+        imageMimeType,
+        currentProject,
+        users: USERS_LIST,
+      })
+    });
+    const body = await r.json();
+    if (!r.ok) {
+      document.getElementById('aiLoadingArea').style.display = 'none';
+      document.getElementById('aiInputArea').style.display = '';
+      showToast('Erro IA: ' + (body.error || r.status), 'error');
+      if (body.instructions) alert(body.error + '\n\n' + body.instructions);
+      return;
+    }
+    _aiResult = body;
+    renderAiResult();
+  } catch (e) {
+    document.getElementById('aiLoadingArea').style.display = 'none';
+    document.getElementById('aiInputArea').style.display = '';
+    showToast('Erro rede: ' + e.message, 'error');
+  }
+}
+
+const AI_FIELD_LABELS = {
+  name:'Nome', code:'Código', area:'Área', tipo:'Tipo',
+  phase:'Fase', status:'Status',
+  solicitante:'Solicitante', patrocinador:'Patrocinador', owner:'Responsável',
+  previsaoInicial:'Previsão Inicial', previsaoFinal:'Previsão Final'
+};
+
+function renderAiResult() {
+  document.getElementById('aiLoadingArea').style.display = 'none';
+  document.getElementById('aiResultArea').style.display = '';
+  const s = _aiResult.suggestions || {};
+  const cronograma = _aiResult.cronograma || [];
+
+  document.getElementById('aiReasoning').textContent = _aiResult.reasoning || 'Sem comentário da IA.';
+
+  _aiSelected = {};
+  const wrap = document.getElementById('aiSuggestions');
+  let html = '';
+
+  const suggestedFields = Object.keys(AI_FIELD_LABELS).filter(k => s[k] !== null && s[k] !== undefined && s[k] !== '');
+  if (suggestedFields.length) {
+    html += '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Campos sugeridos</div>';
+    suggestedFields.forEach(k => {
+      _aiSelected['field:' + k] = true;
+      const currentVal = getCurrentFieldForAi(k);
+      const newVal = formatAiValue(k, s[k]);
+      const displayOld = currentVal && currentVal !== newVal ? `<span class="ai-suggestion-old">${currentVal}</span>` : '';
+      html += `<div class="ai-suggestion-item selected" id="ai-item-field-${k}">
+        <div class="ai-suggestion-check checked" onclick="toggleAiSelect('field:${k}')"></div>
+        <div class="ai-suggestion-field">${AI_FIELD_LABELS[k]}</div>
+        <div class="ai-suggestion-value">${displayOld}${newVal}</div>
+      </div>`;
+    });
+  }
+
+  if (cronograma.length) {
+    html += '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px">Cronograma sugerido (' + cronograma.length + ' atividades)</div>';
+    _aiSelected['cronograma'] = true;
+    html += `<div class="ai-suggestion-item selected">
+      <div class="ai-suggestion-check checked" onclick="toggleAiSelect('cronograma')"></div>
+      <div class="ai-suggestion-field">Adicionar</div>
+      <div class="ai-suggestion-value">${cronograma.length} atividade(s) sugeridas abaixo</div>
+    </div>`;
+    html += '<div style="margin-top:6px">';
+    cronograma.forEach(item => {
+      const resp = item.respKey ? (OWNERS[item.respKey] || item.respKey) : (item.resp || '—');
+      const dates = (item.inicio || item.fim) ? `${item.inicio||'—'} → ${item.fim||'—'}` : '';
+      html += `<div class="ai-cronograma-item">
+        <span class="action-num">${item.num || ''}</span>
+        <span style="font-weight:600;flex:1">${item.title || ''}</span>
+        <span style="color:var(--text2)">${item.etapa || ''}</span>
+        ${resp !== '—' ? `<span class="action-resp-badge">${resp}</span>` : ''}
+        ${dates ? `<span style="color:var(--text2)">${dates}</span>` : ''}
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  if (!suggestedFields.length && !cronograma.length) {
+    html = '<div style="padding:20px;text-align:center;color:var(--text2)">A IA não encontrou informações suficientes. Tente ser mais específico.</div>';
+  }
+
+  wrap.innerHTML = html;
+}
+
+function toggleAiSelect(key) {
+  _aiSelected[key] = !_aiSelected[key];
+  const el = key === 'cronograma'
+    ? document.querySelector('#aiSuggestions .ai-suggestion-item:nth-of-type(1)') // fallback
+    : document.getElementById('ai-item-' + key.replace(':', '-'));
+  // Simplifica: re-renderiza
+  renderAiResultRefresh();
+}
+
+function renderAiResultRefresh() {
+  // Re-render preservando o estado _aiSelected
+  const s = _aiResult.suggestions || {};
+  const cronograma = _aiResult.cronograma || [];
+  const wrap = document.getElementById('aiSuggestions');
+  let html = '';
+
+  const suggestedFields = Object.keys(AI_FIELD_LABELS).filter(k => s[k] !== null && s[k] !== undefined && s[k] !== '');
+  if (suggestedFields.length) {
+    html += '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Campos sugeridos</div>';
+    suggestedFields.forEach(k => {
+      const key = 'field:' + k;
+      const selected = !!_aiSelected[key];
+      const currentVal = getCurrentFieldForAi(k);
+      const newVal = formatAiValue(k, s[k]);
+      const displayOld = currentVal && currentVal !== newVal ? `<span class="ai-suggestion-old">${currentVal}</span>` : '';
+      html += `<div class="ai-suggestion-item ${selected?'selected':''}">
+        <div class="ai-suggestion-check ${selected?'checked':''}" onclick="toggleAiSelect('${key}')"></div>
+        <div class="ai-suggestion-field">${AI_FIELD_LABELS[k]}</div>
+        <div class="ai-suggestion-value">${displayOld}${newVal}</div>
+      </div>`;
+    });
+  }
+  if (cronograma.length) {
+    const selected = !!_aiSelected['cronograma'];
+    html += '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px">Cronograma sugerido (' + cronograma.length + ' atividades)</div>';
+    html += `<div class="ai-suggestion-item ${selected?'selected':''}">
+      <div class="ai-suggestion-check ${selected?'checked':''}" onclick="toggleAiSelect('cronograma')"></div>
+      <div class="ai-suggestion-field">Adicionar</div>
+      <div class="ai-suggestion-value">${cronograma.length} atividade(s)</div>
+    </div>`;
+    html += '<div style="margin-top:6px">';
+    cronograma.forEach(item => {
+      const resp = item.respKey ? (OWNERS[item.respKey] || item.respKey) : (item.resp || '—');
+      const dates = (item.inicio || item.fim) ? `${item.inicio||'—'} → ${item.fim||'—'}` : '';
+      html += `<div class="ai-cronograma-item">
+        <span class="action-num">${item.num || ''}</span>
+        <span style="font-weight:600;flex:1">${item.title || ''}</span>
+        <span style="color:var(--text2)">${item.etapa || ''}</span>
+        ${resp !== '—' ? `<span class="action-resp-badge">${resp}</span>` : ''}
+        ${dates ? `<span style="color:var(--text2)">${dates}</span>` : ''}
+      </div>`;
+    });
+    html += '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
+function getCurrentFieldForAi(k) {
+  if (!currentProject) return '';
+  if (k === 'name') return currentProject.name || '';
+  if (k === 'code') return currentProject.code || '';
+  if (k === 'area') return currentProject.area || '';
+  if (k === 'tipo') return currentProject.tipo || '';
+  if (k === 'phase') return currentProject.phase || '';
+  if (k === 'status') return currentProject.status || '';
+  if (k === 'solicitante') return currentProject.solicitante || '';
+  if (k === 'patrocinador') return currentProject.patrocinador ? (OWNERS[currentProject.patrocinador] || currentProject.patrocinador) : '';
+  if (k === 'owner') return currentProject.owner ? (OWNERS[currentProject.owner] || currentProject.owner) : '';
+  if (k === 'previsaoInicial') return currentProject.previsaoInicial || '';
+  if (k === 'previsaoFinal') return currentProject.previsaoFinal || '';
+  return '';
+}
+function formatAiValue(k, v) {
+  if (k === 'patrocinador' || k === 'owner') return OWNERS[v] || v;
+  return v;
+}
+
+function applyAiSuggestions() {
+  if (!_aiResult || !currentProject) return;
+  const s = _aiResult.suggestions || {};
+  const cronograma = _aiResult.cronograma || [];
+  let appliedFields = 0, appliedActions = 0;
+
+  Object.keys(AI_FIELD_LABELS).forEach(k => {
+    if (!_aiSelected['field:' + k]) return;
+    const v = s[k];
+    if (v === null || v === undefined || v === '') return;
+    if (k === 'name') { currentProject.name = v; document.getElementById('modalTitle').value = v; }
+    else if (k === 'code') { currentProject.code = v; document.getElementById('editCode').value = v; }
+    else if (k === 'area') { currentProject.area = v; document.getElementById('editArea').value = v; }
+    else if (k === 'tipo') { currentProject.tipo = v; document.getElementById('editTipo').value = v; }
+    else if (k === 'phase') { currentProject.phase = v; document.getElementById('editPhase').value = v; }
+    else if (k === 'status') { currentProject.status = v; document.getElementById('editStatus').value = v; }
+    else if (k === 'solicitante') { currentProject.solicitante = v; document.getElementById('editSolicitante').value = v; }
+    else if (k === 'patrocinador') { currentProject.patrocinador = v; document.getElementById('editPatrocinador').value = v; }
+    else if (k === 'owner') { currentProject.owner = v; document.getElementById('editOwner').value = v; }
+    else if (k === 'previsaoInicial') { currentProject.previsaoInicial = v; document.getElementById('editPrevisaoInicial').value = v; }
+    else if (k === 'previsaoFinal') { currentProject.previsaoFinal = v; document.getElementById('editPrevisao').value = v; }
+    appliedFields++;
+  });
+
+  if (_aiSelected['cronograma'] && cronograma.length) {
+    currentProject.actions = currentProject.actions || [];
+    cronograma.forEach(item => {
+      currentProject.actions.push({
+        id: 'a' + Date.now() + Math.random().toString(36).slice(2,6),
+        etapa: item.etapa || undefined,
+        num: item.num || undefined,
+        title: item.title || '',
+        respKey: item.respKey || undefined,
+        resp: item.respKey ? OWNERS[item.respKey] : (item.resp || undefined),
+        inicio: item.inicio || null,
+        fim: item.fim || null,
+        dueDate: item.fim || null,
+        dias: (item.inicio && item.fim) ? String(Math.max(1, Math.round((new Date(item.fim)-new Date(item.inicio))/86400000))) : undefined,
+        status: 'Pendente'
+      });
+      appliedActions++;
+    });
+    renderActions();
+    populateEtapaSelect();
+    populateParentSelect();
+  }
+
+  updateComplianceHeaderTitle();
+  renderComplianceList();
+  renderModalPendencias();
+  markDirty();
+  closeAiAssistant();
+  showToast(`✅ Aplicado: ${appliedFields} campo(s), ${appliedActions} atividade(s). Clique 💾 Salvar para persistir.`, 'success');
+}
 
 /* ---- MINHAS AÇÕES ---- */
 function populateMyActionsPersonSelect() {
