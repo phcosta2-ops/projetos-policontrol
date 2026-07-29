@@ -299,7 +299,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     <div class="bar-list" id="barChart"></div>
   </div>
   <div class="dash-card dash-row-full">
-    <div class="dash-card-title" style="margin-bottom:4px">⚠ Pendências de Conformidade — PO DES 001</div>
+    <div class="dash-card-title" style="margin-bottom:4px">⚠ Pendências de Conformidade — PO DES 001 (Industrial) / PO DES 002 (Químico)</div>
     <div class="dash-card-sub">Projetos ativos com registros obrigatórios faltando (TAP, Cronograma, Validação, Lote Piloto, Encerramento)</div>
     <div id="complianceGaps"></div>
   </div>
@@ -370,7 +370,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
         </select></div>
       <div class="modal-field"><label>Previsão Final</label><input type="date" id="editPrevisao" onchange="markDirty(); renderModalPendencias();"></div>
       <div class="modal-field"><label>Área</label>
-        <select id="editArea">
+        <select id="editArea" onchange="markDirty(); onAreaChange();">
           <option>Des. Industrial</option><option>Des. Químico</option><option>Contratado</option><option>Projetos Especiais</option>
         </select></div>
       <div class="modal-field"><label>Responsável</label>
@@ -426,7 +426,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 
     <div class="update-section">
       <div class="section-hdr" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-        <span>Conformidade PO DES 001</span>
+        <span id="complianceHeaderTitle">Conformidade PO DES 001</span>
         <span id="complianceBadge" style="font-size:13px;font-weight:800"></span>
       </div>
       <div id="complianceList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px"></div>
@@ -475,20 +475,43 @@ let projects = [];
 let currentProject = null;
 let filters = { status:'all', area:'all' };
 
-/* ---- CONFORMIDADE PO DES 001 ---- */
-const COMPLIANCE_ITEMS = [
-  { key:'tap',          title:'Termo de Abertura (TAP)',        code:'FORM DES 001', minPhase:1 },
-  { key:'cronograma',   title:'Cronograma formal',              code:'FORM DES 002', minPhase:1 },
-  { key:'validacao',    title:'Relatório de Validação',           code:'FORM DES 006', minPhase:3 },
-  { key:'lotePiloto',   title:'Verificação Lote Piloto',         code:'FORM CQ 043',  minPhase:4 },
-  { key:'encerramento', title:'Encerramento aprovado',           code:'—',            requiresConcluido:true },
+/* ---- CONFORMIDADE POR PROCEDIMENTO OPERACIONAL ---- */
+// Itens comuns (Industrial + Químico)
+const COMPLIANCE_COMMON = [
+  { key:'tap',          title:'Termo de Abertura (TAP)',   code:'FORM DES 001', minPhase:1 },
+  { key:'cronograma',   title:'Cronograma formal',         code:'FORM DES 002', minPhase:1 },
+  { key:'validacao',    title:'Relatório de Validação',      code:'FORM DES 006', minPhase:3 },
 ];
+// Itens exclusivos Industrial (PO DES 001)
+const COMPLIANCE_INDUSTRIAL_ONLY = [
+  { key:'lotePiloto',   title:'Verificação Lote Piloto',    code:'FORM CQ 043',  minPhase:4 },
+];
+// Itens exclusivos Químico (PO DES 002)
+const COMPLIANCE_QUIMICO_ONLY = [
+  { key:'formulacoes',  title:'Controle de Formulações',    code:'FORM DES 007', minPhase:1 },
+];
+const COMPLIANCE_ENCERRAMENTO = [
+  { key:'encerramento', title:'Encerramento aprovado',      code:'—',            requiresConcluido:true },
+];
+
+function complianceItemsFor(area) {
+  if (area === 'Des. Químico') {
+    return [...COMPLIANCE_COMMON, ...COMPLIANCE_QUIMICO_ONLY, ...COMPLIANCE_ENCERRAMENTO];
+  }
+  // Industrial (padrão), Contratado e Projetos Especiais usam o PO DES 001 por ora
+  return [...COMPLIANCE_COMMON, ...COMPLIANCE_INDUSTRIAL_ONLY, ...COMPLIANCE_ENCERRAMENTO];
+}
+
+function complianceProcedureFor(area) {
+  return area === 'Des. Químico' ? 'PO DES 002' : 'PO DES 001';
+}
+
 const PHASE_ORDER = ['Ideação','Desenvolvimento','Testes','Validação','Lote Piloto','Lançamento','Concluído'];
 
 function applicableCompliance(p) {
   const idx = PHASE_ORDER.indexOf(p.phase);
   const concluido = p.status === 'Concluído';
-  return COMPLIANCE_ITEMS.filter(it => {
+  return complianceItemsFor(p.area).filter(it => {
     if (it.requiresConcluido) return concluido;
     if (it.minPhase !== undefined && idx < it.minPhase) return false;
     return true;
@@ -520,9 +543,10 @@ function renderComplianceList() {
   const badge = document.getElementById('complianceBadge');
   if (!currentProject) return;
   currentProject.compliance = currentProject.compliance || {};
+  const items = complianceItemsFor(currentProject.area);
   const applicable = applicableCompliance(currentProject);
   const applicableKeys = new Set(applicable.map(it => it.key));
-  const html = COMPLIANCE_ITEMS.map(it => {
+  const html = items.map(it => {
     const rec = currentProject.compliance[it.key] || { done:false, link:'' };
     const isApplicable = applicableKeys.has(it.key);
     const done = !!rec.done;
@@ -536,9 +560,10 @@ function renderComplianceList() {
   }).join('');
   wrap.innerHTML = html;
   const c = calcCompliance(currentProject);
+  const proc = complianceProcedureFor(currentProject.area);
   badge.innerHTML = c.pct===null
-    ? '<span style="color:var(--text2);font-size:11px;font-weight:600">— aguardando fase</span>'
-    : `${complianceBadgeHTML(c.pct)} <span style="color:var(--text2);font-size:11px;font-weight:600;margin-left:6px">${c.done}/${c.applicable}</span>`;
+    ? `<span style="color:var(--text2);font-size:11px;font-weight:600">${proc} · aguardando fase</span>`
+    : `${complianceBadgeHTML(c.pct)} <span style="color:var(--text2);font-size:11px;font-weight:600;margin-left:6px">${c.done}/${c.applicable} · ${proc}</span>`;
 }
 
 function toggleCompliance(key) {
@@ -567,8 +592,24 @@ function onPhaseOrStatusChange() {
   // atualiza modelo em memória para que applicableCompliance use os valores novos
   currentProject.phase = document.getElementById('editPhase').value;
   currentProject.status = document.getElementById('editStatus').value;
+  updateComplianceHeaderTitle();
   renderComplianceList();
   renderModalPendencias();
+}
+
+function onAreaChange() {
+  if (!currentProject) return;
+  currentProject.area = document.getElementById('editArea').value;
+  updateComplianceHeaderTitle();
+  renderComplianceList();
+  renderModalPendencias();
+}
+
+function updateComplianceHeaderTitle() {
+  const el = document.getElementById('complianceHeaderTitle');
+  if (!el || !currentProject) return;
+  const proc = complianceProcedureFor(currentProject.area);
+  el.textContent = `Conformidade ${proc}`;
 }
 
 /* ---- PAINEL DE PENDÊNCIAS NO MODAL ---- */
@@ -646,7 +687,7 @@ function renderModalPendencias() {
     : '';
 
   const poHTML = poFaltando.length
-    ? `<div class="pendencias-section">Documentação PO DES 001 pendente${comp.pct!==null?` (${comp.pct}%)`:''}</div>
+    ? `<div class="pendencias-section">Documentação ${complianceProcedureFor(currentProject.area)} pendente${comp.pct!==null?` (${comp.pct}%)`:''}</div>
        ${poFaltando.map(it => `<button class="pendencias-chip" onclick="scrollToCompliance('${it.title.substring(0,20)}')">⚠ ${it.title}${it.code&&it.code!=='—'?`<span class="pchip-code">${it.code}</span>`:''}</button>`).join('')}`
     : '';
 
@@ -873,7 +914,7 @@ function renderDashboard() {
     <div class="kpi-card" style="border-left:3px solid #1d4ed8"><div class="kpi-num" style="color:#1d4ed8">${counts['Concluído']||0}</div><div class="kpi-label">Concluídos</div></div>
     <div class="kpi-card kpi-blue"><div class="kpi-num">${totalA}</div><div class="kpi-label">Ações Pendentes</div></div>
     <div class="kpi-card kpi-orange"><div class="kpi-num">${lateA}</div><div class="kpi-label">Ações Atrasadas</div></div>
-    <div class="kpi-card" style="border-left:3px solid ${compColor}" title="Média de conformidade PO DES 001 dos projetos ativos aplicáveis"><div class="kpi-num" style="color:${compColor}">${compAvg===null?'—':compAvg+'%'}</div><div class="kpi-label">Conf. PO DES 001${compBad>0?` · ${compBad} crítico(s)`:''}</div></div>`;
+    <div class="kpi-card" style="border-left:3px solid ${compColor}" title="Média de conformidade PO DES (001 Industrial / 002 Químico) dos projetos ativos aplicáveis"><div class="kpi-num" style="color:${compColor}">${compAvg===null?'—':compAvg+'%'}</div><div class="kpi-label">Conf. PO DES${compBad>0?` · ${compBad} crítico(s)`:''}</div></div>`;
 
   const donutAreas = ['Des. Industrial','Des. Químico','Contratado'];
   document.getElementById('donutRow').innerHTML = donutAreas.map(area => {
@@ -994,14 +1035,15 @@ function renderDashboard() {
     .sort((a,b) => a.c.pct - b.c.pct);
   const gapsEl = document.getElementById('complianceGaps');
   if (!gaps.length) {
-    gapsEl.innerHTML = '<div style="color:var(--text2);padding:20px;text-align:center">✅ Todos os projetos ativos estão com registros PO DES 001 em dia!</div>';
+    gapsEl.innerHTML = '<div style="color:var(--text2);padding:20px;text-align:center">✅ Todos os projetos ativos estão com registros PO DES em dia!</div>';
   } else {
     gapsEl.innerHTML = `<div class="table-wrap" style="margin-top:6px"><table class="projects-table">
-      <thead><tr><th>Projeto</th><th>Área</th><th>Fase</th><th>Conf.</th><th>Registros faltando</th></tr></thead>
+      <thead><tr><th>Projeto</th><th>Área</th><th>PO</th><th>Fase</th><th>Conf.</th><th>Registros faltando</th></tr></thead>
       <tbody>${gaps.slice(0,20).map(x => `
         <tr onclick="openProject('${x.p.id}')">
           <td><span style="font-weight:600" title="${x.p.name}">${x.p.name.length>40?x.p.name.substring(0,40)+'…':x.p.name}</span></td>
           <td><span class="badge badge-area">${x.p.area}</span></td>
+          <td><span class="compliance-code">${complianceProcedureFor(x.p.area)}</span></td>
           <td><span class="badge badge-phase">${x.p.phase}</span></td>
           <td>${complianceBadgeHTML(x.c.pct)}</td>
           <td style="font-size:12px">${x.c.pending.map(it => `<span class="compliance-code" style="margin-right:4px">${it.code!=='—'?it.code:it.title}</span>`).join('')}</td>
@@ -1048,7 +1090,7 @@ function renderTable() {
       <td style="font-size:12px">${OWNERS[p.owner]||p.owner}</td>
       <td style="font-size:12px">${fmt(p.previsaoFinal)}</td>
       <td><span class="actions-count ${cls}">${lbl}</span></td>
-      <td title="${comp.pct===null?'Aguardando fase avançar':comp.done+'/'+comp.applicable+' registros do PO DES 001'}">${complianceBadgeHTML(comp.pct)}</td>
+      <td title="${comp.pct===null?'Aguardando fase avançar':comp.done+'/'+comp.applicable+' registros do '+complianceProcedureFor(p.area)}">${complianceBadgeHTML(comp.pct)}</td>
     </tr>`;
   }).join('');
   container.innerHTML=`<div class="table-wrap"><table class="projects-table">
@@ -1090,7 +1132,7 @@ function openProject(id) {
   document.getElementById('editPatrocinador').value=p.patrocinador||'';
   document.getElementById('updateInput').value='';
   _dirty = false;
-  renderActions(); renderUpdates(); populateEtapaSelect(); populateParentSelect(); populateActionRespSelect(); renderComplianceList(); renderModalPendencias();
+  renderActions(); renderUpdates(); populateEtapaSelect(); populateParentSelect(); populateActionRespSelect(); updateComplianceHeaderTitle(); renderComplianceList(); renderModalPendencias();
   document.getElementById('modalOverlay').classList.add('open');
 }
 
