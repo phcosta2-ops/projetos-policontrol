@@ -210,6 +210,18 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .add-action-form .inp-resp { width: 130px; }
 .add-action-form .inp-date { width: 140px; }
 
+.pendencias-card { background:#fef9e7; border:1px solid #fbbf24; border-radius:10px; padding:12px 14px; margin-bottom:18px; }
+.pendencias-card.critical { background:#fef2f2; border-color:#fca5a5; }
+.pendencias-title { font-size:13px; font-weight:800; color:#92400e; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+.pendencias-card.critical .pendencias-title { color:#991b1b; }
+.pendencias-section { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); margin:8px 0 4px; }
+.pendencias-chip { display:inline-flex; align-items:center; gap:5px; background:#fff; border:1px solid #fcd34d; border-radius:20px; padding:3px 10px 3px 8px; font-size:12px; margin:3px 4px 3px 0; cursor:pointer; transition:all 0.15s; font-weight:600; color:#78350f; }
+.pendencias-chip:hover { background:#fef3c7; border-color:#f59e0b; }
+.pendencias-chip .pchip-code { font-family:monospace; font-size:10px; color:var(--text2); background:#f1f5f9; padding:1px 5px; border-radius:3px; font-weight:700; }
+.pendencias-chip.done { background:#dcfce7; border-color:#86efac; color:#166534; }
+.pendencias-highlight { animation: pulseFlash 1.4s ease; }
+@keyframes pulseFlash { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0)} 30%{box-shadow:0 0 0 4px rgba(245,158,11,0.35)} 60%{box-shadow:0 0 0 6px rgba(245,158,11,0)} }
+
 .compliance-item { display:flex; align-items:center; gap:10px; background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; }
 .compliance-item.done { background:#f0fdf4; border-color:#86efac; }
 .compliance-item.na { opacity:0.55; }
@@ -337,11 +349,12 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     <button class="modal-close" onclick="closeModal()">✕</button>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
       <label style="font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap">Código:</label>
-      <input type="text" id="editCode" placeholder="Ex: DNP-001" style="font-family:monospace;font-size:13px;color:var(--text);border:none;border-bottom:1px solid var(--border);outline:none;background:transparent;padding:2px 6px;width:140px" oninput="markDirty()">
+      <input type="text" id="editCode" placeholder="Ex: DNP-001" style="font-family:monospace;font-size:13px;color:var(--text);border:none;border-bottom:1px solid var(--border);outline:none;background:transparent;padding:2px 6px;width:140px" oninput="markDirty(); renderModalPendencias();">
       <span id="dirtyIndicator" style="font-size:11px;color:var(--yellow);font-weight:600;display:none">⚠ alterações não salvas</span>
     </div>
     <input type="text" id="modalTitle" style="font-size:18px;font-weight:800;border:none;border-bottom:2px solid var(--border);outline:none;width:100%;margin-bottom:10px;padding:4px 0;background:transparent;color:var(--text)" placeholder="Nome do projeto...">
     <div class="modal-badges" id="modalBadges"></div>
+    <div id="modalPendencias" style="display:none"></div>
     <div class="modal-grid">
       <div class="modal-field"><label>Status</label>
         <select id="editStatus" onchange="markDirty(); onPhaseOrStatusChange();">
@@ -355,7 +368,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
         <select id="editPhase" onchange="markDirty(); onPhaseOrStatusChange();">
           <option>Ideação</option><option>Desenvolvimento</option><option>Testes</option><option>Validação</option><option>Lote Piloto</option><option>Lançamento</option><option>Concluído</option>
         </select></div>
-      <div class="modal-field"><label>Previsão Final</label><input type="date" id="editPrevisao"></div>
+      <div class="modal-field"><label>Previsão Final</label><input type="date" id="editPrevisao" onchange="markDirty(); renderModalPendencias();"></div>
       <div class="modal-field"><label>Área</label>
         <select id="editArea">
           <option>Des. Industrial</option><option>Des. Químico</option><option>Contratado</option><option>Projetos Especiais</option>
@@ -372,14 +385,14 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
         <select id="editTipo">
           <option>Novo Produto</option><option>Melhoria / Red. Custo</option><option>Contratado</option><option>Outro</option>
         </select></div>
-      <div class="modal-field"><label>Previsão Inicial</label><input type="date" id="editPrevisaoInicial" title="Data original planejada (antes de qualquer reprogramação) — usada para calcular o Descolamento"></div>
+      <div class="modal-field"><label>Previsão Inicial</label><input type="date" id="editPrevisaoInicial" title="Data original planejada (antes de qualquer reprogramação) — usada para calcular o Descolamento" onchange="markDirty(); renderModalPendencias();"></div>
       <div class="modal-field"><label>Solicitante / Origem</label>
-        <select id="editSolicitante" title="Origem do projeto conforme PO DES 001, passo 1">
+        <select id="editSolicitante" title="Origem do projeto conforme PO DES 001, passo 1" onchange="markDirty(); renderModalPendencias();">
           <option value="">—</option>
           <option>Cliente</option><option>Vendas</option><option>Licitações</option><option>Produto</option><option>Produção Industrial</option><option>Produção Química</option><option>Depto Serviços</option><option>Compras</option><option>Diretoria</option><option>Outros</option>
         </select></div>
       <div class="modal-field"><label>Patrocinador</label>
-        <select id="editPatrocinador" title="Aprovador da abertura do projeto (PO DES 001, passo 5-6)">
+        <select id="editPatrocinador" title="Aprovador da abertura do projeto (PO DES 001, passo 5-6)" onchange="markDirty(); renderModalPendencias();">
           <option value="">—</option>
         </select></div>
     </div>
@@ -536,6 +549,7 @@ function toggleCompliance(key) {
   if (rec.done) rec.date = new Date().toISOString().split('T')[0];
   currentProject.compliance[key] = rec;
   renderComplianceList();
+  renderModalPendencias();
   markDirty();
 }
 
@@ -554,6 +568,94 @@ function onPhaseOrStatusChange() {
   currentProject.phase = document.getElementById('editPhase').value;
   currentProject.status = document.getElementById('editStatus').value;
   renderComplianceList();
+  renderModalPendencias();
+}
+
+/* ---- PAINEL DE PENDÊNCIAS NO MODAL ---- */
+function focusFieldById(id, highlightSelector) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const target = highlightSelector ? document.querySelector(highlightSelector) : el;
+  if (target && target.scrollIntoView) target.scrollIntoView({behavior:'smooth', block:'center'});
+  setTimeout(() => {
+    if (target && target.classList) {
+      target.classList.add('pendencias-highlight');
+      setTimeout(() => target.classList.remove('pendencias-highlight'), 1500);
+    }
+    try { el.focus(); if (el.select) el.select(); } catch(e){}
+  }, 250);
+}
+
+function scrollToCompliance(key) {
+  const list = document.getElementById('complianceList');
+  if (!list) return;
+  list.scrollIntoView({behavior:'smooth', block:'center'});
+  setTimeout(() => {
+    const items = list.querySelectorAll('.compliance-item');
+    for (const it of items) {
+      if (it.querySelector('.compliance-title')?.textContent?.trim().toLowerCase().includes(key.toLowerCase())) {
+        it.classList.add('pendencias-highlight');
+        setTimeout(() => it.classList.remove('pendencias-highlight'), 1500);
+        break;
+      }
+    }
+  }, 300);
+}
+
+function getCurrentFieldValues() {
+  return {
+    code: document.getElementById('editCode')?.value?.trim() || '',
+    previsaoInicial: document.getElementById('editPrevisaoInicial')?.value || '',
+    previsaoFinal: document.getElementById('editPrevisao')?.value || '',
+    solicitante: document.getElementById('editSolicitante')?.value || '',
+    patrocinador: document.getElementById('editPatrocinador')?.value || '',
+  };
+}
+
+function renderModalPendencias() {
+  const wrap = document.getElementById('modalPendencias');
+  if (!wrap || !currentProject) return;
+  const cur = getCurrentFieldValues();
+
+  const camposFaltando = [];
+  if (!cur.code) camposFaltando.push({label:'Código do projeto', focusId:'editCode'});
+  if (!cur.previsaoInicial) camposFaltando.push({label:'Previsão Inicial', focusId:'editPrevisaoInicial'});
+  if (!cur.previsaoFinal) camposFaltando.push({label:'Previsão Final', focusId:'editPrevisao'});
+  if (!cur.solicitante) camposFaltando.push({label:'Solicitante / Origem', focusId:'editSolicitante'});
+  if (!cur.patrocinador) camposFaltando.push({label:'Patrocinador', focusId:'editPatrocinador'});
+
+  // Sincroniza phase/status em memória antes de calcular compliance
+  const phaseSel = document.getElementById('editPhase');
+  const statusSel = document.getElementById('editStatus');
+  if (phaseSel) currentProject.phase = phaseSel.value;
+  if (statusSel) currentProject.status = statusSel.value;
+  const comp = calcCompliance(currentProject);
+  const poFaltando = comp.pending;
+
+  const total = camposFaltando.length + poFaltando.length;
+  if (total === 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+
+  const critical = comp.pct !== null && comp.pct < 50;
+
+  const camposHTML = camposFaltando.length
+    ? `<div class="pendencias-section">Campos por preencher</div>
+       ${camposFaltando.map(f => `<button class="pendencias-chip" onclick="focusFieldById('${f.focusId}')">⚠ ${f.label}</button>`).join('')}`
+    : '';
+
+  const poHTML = poFaltando.length
+    ? `<div class="pendencias-section">Documentação PO DES 001 pendente${comp.pct!==null?` (${comp.pct}%)`:''}</div>
+       ${poFaltando.map(it => `<button class="pendencias-chip" onclick="scrollToCompliance('${it.title.substring(0,20)}')">⚠ ${it.title}${it.code&&it.code!=='—'?`<span class="pchip-code">${it.code}</span>`:''}</button>`).join('')}`
+    : '';
+
+  wrap.innerHTML = `<div class="pendencias-card ${critical?'critical':''}">
+    <div class="pendencias-title">⚠ Este projeto tem ${total} item(ns) para completar</div>
+    ${camposHTML}
+    ${poHTML}
+  </div>`;
+  wrap.style.display = '';
 }
 const today = new Date(); today.setHours(0,0,0,0);
 
@@ -988,7 +1090,7 @@ function openProject(id) {
   document.getElementById('editPatrocinador').value=p.patrocinador||'';
   document.getElementById('updateInput').value='';
   _dirty = false;
-  renderActions(); renderUpdates(); populateEtapaSelect(); populateParentSelect(); populateActionRespSelect(); renderComplianceList();
+  renderActions(); renderUpdates(); populateEtapaSelect(); populateParentSelect(); populateActionRespSelect(); renderComplianceList(); renderModalPendencias();
   document.getElementById('modalOverlay').classList.add('open');
 }
 
