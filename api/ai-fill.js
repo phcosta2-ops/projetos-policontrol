@@ -79,9 +79,10 @@ REGRAS:
 - Área: se mencionar reagente, química, formulação, fórmula, sachê, pastilha, pó → "Des. Químico". Hardware, placa, sensor, instrumento, medidor, esquema elétrico, gerber, firmware → "Des. Industrial".
 - Tipo: substituir fornecedor / reduzir custo → "Melhoria / Red. Custo". Produto novo do zero → "Novo Produto".
 - respKey / owner / patrocinador: use APENAS as chaves listadas em USUÁRIOS DISPONÍVEIS (ex: "raphael", "luciana"). Se não conseguir identificar com certeza, use null.
-- Cronograma: sugira 3-8 etapas iniciais só se houver contexto (ex: novo desenvolvimento). Para updates simples de projeto existente, retorne cronograma: [].
-- Etapas típicas Industrial: ESCOPO, HARDWARE, FIRMWARE, TESTES, DOCUMENTAÇÃO, LOTE PILOTO.
-- Etapas típicas Químico: ESCOPO, FORMULAÇÃO, TESTES, VALIDAÇÃO, LOTE PILOTO, RETENÇÃO.
+- Cronograma: sugira 3-8 atividades iniciais só se houver contexto (ex: novo desenvolvimento). Para updates simples de projeto existente, retorne cronograma: [].
+- Quando o usuário pedir um "cronograma completo", "todas as fases" ou um plano de desenvolvimento, crie um cronograma detalhado de 12 a 25 atividades, distribuídas em TODAS as etapas aplicáveis, com datas sequenciais e realistas entre a data de início e a data final informadas. Se não houver datas, deixe inicio/fim null.
+- Etapas típicas Industrial: ESCOPO, HARDWARE, FIRMWARE, TESTES, VALIDAÇÃO, DOCUMENTAÇÃO, LOTE PILOTO, LANÇAMENTO.
+- Etapas típicas Químico: ESCOPO, FORMULAÇÃO, TESTES, VALIDAÇÃO, LOTE PILOTO, RETENÇÃO, DOCUMENTAÇÃO, LANÇAMENTO.
 - Se o texto sugere que o projeto FOI CONCLUÍDO (ex: "encerrado", "entregue", "finalizado"), preencha status="Concluído" e dataConclusao com a data mencionada (ou hoje se não especificada).
 - Se o texto é uma ATUALIZAÇÃO sobre projeto existente (menciona mudanças de status/prazo/ações completadas), preencha só os campos que mudaram e deixe o resto null.
 - Retorne SÓ o JSON, nada mais.`;
@@ -112,7 +113,9 @@ export default async function handler(req, res) {
     parts.push({ inlineData: { mimeType: imageMimeType, data: imageBase64 } });
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  // Gemini 2.5 Flash foi descontinuado para novas chaves. Flash-Lite é o sucessor
+  // atual para extração estruturada, cronogramas e leitura de imagens.
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
 
   try {
     const gr = await fetch(url, {
@@ -121,7 +124,6 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         contents: [{ role: 'user', parts }],
         generationConfig: {
-          temperature: 0.2,
           responseMimeType: 'application/json'
         }
       })

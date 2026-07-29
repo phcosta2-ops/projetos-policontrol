@@ -444,7 +444,8 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
         </select>
         <input type="date" id="newActionInicio" class="inp-date">
         <input type="date" id="newActionFim" class="inp-date">
-        <button class="btn btn-primary btn-sm" onclick="addAction()">+ Adicionar</button>
+        <button class="btn btn-primary btn-sm" id="addActionBtn" onclick="addAction()">+ Adicionar</button>
+        <button class="btn btn-outline btn-sm" id="cancelEditActionBtn" onclick="cancelEditAction()" style="display:none">Cancelar edição</button>
       </div>
     </div>
 
@@ -1284,7 +1285,8 @@ function renderActions() {
   const todayStr = new Date().toISOString().split('T')[0];
   let html = '';
   groupOrder.forEach(grp => {
-    html += `<div class="etapa-group"><div class="etapa-header">${grp}</div>`;
+    const grpArg = JSON.stringify(grp).replace(/"/g, '&quot;');
+    html += `<div class="etapa-group"><div class="etapa-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span>${grp}</span><button class="action-delete" title="Excluir etapa e todas as atividades dela" onclick="deleteEtapa(${grpArg})">Excluir etapa</button></div>`;
     const items = groups[grp];
     const byId = {};
     items.forEach(it => { if (it.a.id) byId[it.a.id] = it; });
@@ -1317,7 +1319,8 @@ function renderActions() {
         ${datesStr ? `<span class="action-dates">${datesStr}</span>` : ''}
         ${diasStr ? `<span class="action-dias">${diasStr}</span>` : ''}
         ${late ? `<span class="action-late-crono">⚠ ${lateDays}d atraso</span>` : ''}
-        <button class="action-delete" onclick="deleteAction(${i})">✕</button>
+        <button class="action-delete" title="Editar atividade" onclick="editAction(${i})" style="color:var(--accent)">✎</button>
+        <button class="action-delete" title="Excluir atividade" onclick="deleteAction(${i})">✕</button>
       </div>`;
       const kids = (childrenOf[a.id]||[]).slice().sort((x,y)=>compareNum(x.a,y.a));
       kids.forEach(k => renderItem(k, depth+1));
@@ -1328,7 +1331,59 @@ function renderActions() {
   list.innerHTML = html;
 }
 
-function toggleAction(i) { currentProject.actions[i].status=['Concluída','Cancelada'].includes(currentProject.actions[i].status)?'Pendente':'Concluída'; renderActions(); }
+let editingActionIndex = null;
+
+function toggleAction(i) {
+  currentProject.actions[i].status=['Concluída','Cancelada'].includes(currentProject.actions[i].status)?'Pendente':'Concluída';
+  markDirty();
+  renderActions();
+}
+
+function deleteEtapa(etapa) {
+  const count = (currentProject.actions || []).filter(a => (a.etapa || 'Geral') === etapa).length;
+  if (!count || !confirm(`Excluir a etapa “${etapa}” e suas ${count} atividade(s)?`)) return;
+  currentProject.actions = currentProject.actions.filter(a => (a.etapa || 'Geral') !== etapa);
+  markDirty();
+  renderActions();
+  populateEtapaSelect();
+  populateParentSelect();
+}
+
+function editAction(i) {
+  const a = currentProject.actions[i];
+  if (!a) return;
+  editingActionIndex = i;
+  const etapaSelect = document.getElementById('newActionEtapa');
+  populateEtapaSelect();
+  const etapaOptions = Array.from(etapaSelect.options).map(o => o.value);
+  if (a.etapa && !etapaOptions.includes(a.etapa)) {
+    etapaSelect.value = '__nova__';
+    document.getElementById('newEtapaName').style.display = '';
+    document.getElementById('newEtapaName').value = a.etapa;
+  } else etapaSelect.value = a.etapa || '';
+  populateParentSelect();
+  document.getElementById('newActionParent').value = a.parentId || '';
+  document.getElementById('newActionNum').value = a.num || '';
+  document.getElementById('newActionTitle').value = a.title || '';
+  document.getElementById('newActionResp').value = a.respKey || a.assignee || '';
+  document.getElementById('newActionInicio').value = a.inicio || '';
+  document.getElementById('newActionFim').value = a.fim || a.dueDate || '';
+  document.getElementById('addActionBtn').textContent = 'Salvar atividade';
+  document.getElementById('cancelEditActionBtn').style.display = '';
+  document.getElementById('newActionTitle').focus();
+}
+
+function cancelEditAction() {
+  editingActionIndex = null;
+  ['newActionTitle','newActionNum','newEtapaName','newActionInicio','newActionFim'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('newActionEtapa').value = '';
+  document.getElementById('newActionParent').value = '';
+  document.getElementById('newActionResp').value = '';
+  document.getElementById('newEtapaName').style.display = 'none';
+  document.getElementById('addActionBtn').textContent = '+ Adicionar';
+  document.getElementById('cancelEditActionBtn').style.display = 'none';
+}
+
 function deleteAction(i) {
   const removed = currentProject.actions[i];
   if (!removed) return;
@@ -1345,6 +1400,8 @@ function deleteAction(i) {
     });
   }
   currentProject.actions = currentProject.actions.filter(a => !(a.id && idsToRemove.has(a.id)));
+  if (editingActionIndex === i) cancelEditAction();
+  markDirty();
   renderActions();
   populateEtapaSelect();
   populateParentSelect();
@@ -1399,8 +1456,8 @@ function addAction() {
   const parentId = document.getElementById('newActionParent').value || undefined;
   const inicio = document.getElementById('newActionInicio').value || null;
   const fim = document.getElementById('newActionFim').value || null;
-  currentProject.actions.push({
-    id: 'a' + Date.now() + Math.random().toString(36).slice(2,6),
+  const actionData = {
+    id: editingActionIndex !== null ? currentProject.actions[editingActionIndex].id : 'a' + Date.now() + Math.random().toString(36).slice(2,6),
     etapa: etapa || undefined,
     num: num || undefined,
     title,
@@ -1410,19 +1467,14 @@ function addAction() {
     dias: (inicio && fim) ? String(Math.max(1, Math.round((new Date(fim)-new Date(inicio))/86400000))) : undefined,
     inicio,
     fim,
-    // legacy compat
     dueDate: fim,
     assignee: undefined,
-    status: 'Pendente'
-  });
-  document.getElementById('newActionTitle').value = '';
-  document.getElementById('newActionNum').value = '';
-  document.getElementById('newActionResp').value = '';
-  document.getElementById('newActionParent').value = '';
-  document.getElementById('newActionInicio').value = '';
-  document.getElementById('newActionFim').value = '';
-  document.getElementById('newEtapaName').value = '';
-  document.getElementById('newEtapaName').style.display = 'none';
+    status: editingActionIndex !== null ? (currentProject.actions[editingActionIndex].status || 'Pendente') : 'Pendente'
+  };
+  if (editingActionIndex !== null) currentProject.actions[editingActionIndex] = actionData;
+  else currentProject.actions.push(actionData);
+  cancelEditAction();
+  markDirty();
   renderActions();
   populateEtapaSelect();
   populateParentSelect();
