@@ -210,6 +210,23 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .add-action-form .inp-resp { width: 130px; }
 .add-action-form .inp-date { width: 140px; }
 
+.compliance-item { display:flex; align-items:center; gap:10px; background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; }
+.compliance-item.done { background:#f0fdf4; border-color:#86efac; }
+.compliance-item.na { opacity:0.55; }
+.compliance-check { width:18px; height:18px; border-radius:4px; border:2px solid var(--border); cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:all 0.15s; background:#fff; }
+.compliance-check.checked { background:var(--green); border-color:var(--green); }
+.compliance-check.checked::after { content:'✓'; color:#fff; font-size:11px; font-weight:800; }
+.compliance-check.disabled { cursor:not-allowed; opacity:0.4; }
+.compliance-title { font-weight:600; flex:1; }
+.compliance-code { font-family:monospace; font-size:11px; color:var(--text2); background:#eef2f7; padding:1px 6px; border-radius:4px; }
+.compliance-na-tag { font-size:10px; font-weight:700; color:var(--text2); background:#e2e8f0; padding:2px 6px; border-radius:4px; }
+.compliance-link { flex:none; width:180px; font-size:12px; background:#fff; border:1px solid var(--border); border-radius:6px; padding:5px 8px; outline:none; }
+.compliance-link:focus { border-color:var(--accent); }
+.badge-compliance { font-size:11px; font-weight:800; padding:3px 8px; border-radius:20px; white-space:nowrap; }
+.compliance-ok { background:#dcfce7; color:#16a34a; }
+.compliance-warn { background:#fef3c7; color:#d97706; }
+.compliance-bad { background:#fee2e2; color:#dc2626; }
+
 .toast { position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: 13px; z-index: 999; animation: toastIn 0.2s ease; box-shadow: 0 8px 32px rgba(0,0,0,.12); font-weight: 600; }
 .toast.success { border-color: var(--green); color: #16a34a; }
 .toast.error { border-color: var(--red); color: var(--red); }
@@ -269,6 +286,11 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     <div class="dash-card-sub"></div>
     <div class="bar-list" id="barChart"></div>
   </div>
+  <div class="dash-card dash-row-full">
+    <div class="dash-card-title" style="margin-bottom:4px">⚠ Pendências de Conformidade — PO DES 001</div>
+    <div class="dash-card-sub">Projetos ativos com registros obrigatórios faltando (TAP, Cronograma, Validação, Lote Piloto, Encerramento)</div>
+    <div id="complianceGaps"></div>
+  </div>
 </div>
 
 <!-- LIST VIEW -->
@@ -322,7 +344,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     <div class="modal-badges" id="modalBadges"></div>
     <div class="modal-grid">
       <div class="modal-field"><label>Status</label>
-        <select id="editStatus" onchange="markDirty()">
+        <select id="editStatus" onchange="markDirty(); onPhaseOrStatusChange();">
           <option value="No prazo">✅ No prazo</option>
           <option value="Atrasado">🔴 Atrasado</option>
           <option value="Em risco">⚠️ Em risco</option>
@@ -330,7 +352,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
           <option value="Concluído">🏁 Concluído</option>
         </select></div>
       <div class="modal-field"><label>Fase</label>
-        <select id="editPhase">
+        <select id="editPhase" onchange="markDirty(); onPhaseOrStatusChange();">
           <option>Ideação</option><option>Desenvolvimento</option><option>Testes</option><option>Validação</option><option>Lote Piloto</option><option>Lançamento</option><option>Concluído</option>
         </select></div>
       <div class="modal-field"><label>Previsão Final</label><input type="date" id="editPrevisao"></div>
@@ -351,6 +373,15 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
           <option>Novo Produto</option><option>Melhoria / Red. Custo</option><option>Contratado</option><option>Outro</option>
         </select></div>
       <div class="modal-field"><label>Previsão Inicial</label><input type="date" id="editPrevisaoInicial" title="Data original planejada (antes de qualquer reprogramação) — usada para calcular o Descolamento"></div>
+      <div class="modal-field"><label>Solicitante / Origem</label>
+        <select id="editSolicitante" title="Origem do projeto conforme PO DES 001, passo 1">
+          <option value="">—</option>
+          <option>Cliente</option><option>Vendas</option><option>Licitações</option><option>Produto</option><option>Produção Industrial</option><option>Produção Química</option><option>Depto Serviços</option><option>Compras</option><option>Diretoria</option><option>Outros</option>
+        </select></div>
+      <div class="modal-field"><label>Patrocinador</label>
+        <select id="editPatrocinador" title="Aprovador da abertura do projeto (PO DES 001, passo 5-6)">
+          <option value="">—</option>
+        </select></div>
     </div>
     <div>
       <div class="section-hdr">
@@ -378,6 +409,14 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
         <input type="date" id="newActionFim" class="inp-date">
         <button class="btn btn-primary btn-sm" onclick="addAction()">+ Adicionar</button>
       </div>
+    </div>
+
+    <div class="update-section">
+      <div class="section-hdr" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+        <span>Conformidade PO DES 001</span>
+        <span id="complianceBadge" style="font-size:13px;font-weight:800"></span>
+      </div>
+      <div id="complianceList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px"></div>
     </div>
 
     <div class="update-section">
@@ -422,6 +461,100 @@ const STATUS_COLORS = { 'No prazo':'#22c55e','Atrasado':'#ef4444','Em risco':'#f
 let projects = [];
 let currentProject = null;
 let filters = { status:'all', area:'all' };
+
+/* ---- CONFORMIDADE PO DES 001 ---- */
+const COMPLIANCE_ITEMS = [
+  { key:'tap',          title:'Termo de Abertura (TAP)',        code:'FORM DES 001', minPhase:1 },
+  { key:'cronograma',   title:'Cronograma formal',              code:'FORM DES 002', minPhase:1 },
+  { key:'validacao',    title:'Relatório de Validação',           code:'FORM DES 006', minPhase:3 },
+  { key:'lotePiloto',   title:'Verificação Lote Piloto',         code:'FORM CQ 043',  minPhase:4 },
+  { key:'encerramento', title:'Encerramento aprovado',           code:'—',            requiresConcluido:true },
+];
+const PHASE_ORDER = ['Ideação','Desenvolvimento','Testes','Validação','Lote Piloto','Lançamento','Concluído'];
+
+function applicableCompliance(p) {
+  const idx = PHASE_ORDER.indexOf(p.phase);
+  const concluido = p.status === 'Concluído';
+  return COMPLIANCE_ITEMS.filter(it => {
+    if (it.requiresConcluido) return concluido;
+    if (it.minPhase !== undefined && idx < it.minPhase) return false;
+    return true;
+  });
+}
+
+function calcCompliance(p) {
+  const c = p.compliance || {};
+  const applicable = applicableCompliance(p);
+  if (!applicable.length) return { pct: null, applicable: 0, done: 0, pending: [] };
+  const doneItems = applicable.filter(it => c[it.key] && c[it.key].done);
+  const pending = applicable.filter(it => !(c[it.key] && c[it.key].done));
+  return {
+    pct: Math.round(doneItems.length / applicable.length * 100),
+    applicable: applicable.length,
+    done: doneItems.length,
+    pending
+  };
+}
+
+function complianceBadgeHTML(pct) {
+  if (pct === null) return '<span class="badge-compliance compliance-warn">—</span>';
+  const cls = pct >= 80 ? 'compliance-ok' : pct >= 50 ? 'compliance-warn' : 'compliance-bad';
+  return `<span class="badge-compliance ${cls}">${pct}%</span>`;
+}
+
+function renderComplianceList() {
+  const wrap = document.getElementById('complianceList');
+  const badge = document.getElementById('complianceBadge');
+  if (!currentProject) return;
+  currentProject.compliance = currentProject.compliance || {};
+  const applicable = applicableCompliance(currentProject);
+  const applicableKeys = new Set(applicable.map(it => it.key));
+  const html = COMPLIANCE_ITEMS.map(it => {
+    const rec = currentProject.compliance[it.key] || { done:false, link:'' };
+    const isApplicable = applicableKeys.has(it.key);
+    const done = !!rec.done;
+    return `<div class="compliance-item ${done?'done':''} ${!isApplicable?'na':''}">
+      <div class="compliance-check ${done?'checked':''} ${!isApplicable?'disabled':''}" onclick="${isApplicable?`toggleCompliance('${it.key}')`:''}" title="${isApplicable?'Clique para marcar/desmarcar':'Ainda não aplicável para a fase atual'}"></div>
+      <span class="compliance-title">${it.title}</span>
+      ${it.code!=='—' ? `<span class="compliance-code">${it.code}</span>` : ''}
+      ${!isApplicable ? '<span class="compliance-na-tag">N/A</span>' : ''}
+      <input type="text" class="compliance-link" placeholder="link/pasta (opcional)" value="${(rec.link||'').replace(/"/g,'&quot;')}" oninput="updateComplianceLink('${it.key}', this.value)" ${!isApplicable?'disabled':''}>
+    </div>`;
+  }).join('');
+  wrap.innerHTML = html;
+  const c = calcCompliance(currentProject);
+  badge.innerHTML = c.pct===null
+    ? '<span style="color:var(--text2);font-size:11px;font-weight:600">— aguardando fase</span>'
+    : `${complianceBadgeHTML(c.pct)} <span style="color:var(--text2);font-size:11px;font-weight:600;margin-left:6px">${c.done}/${c.applicable}</span>`;
+}
+
+function toggleCompliance(key) {
+  if (!currentProject) return;
+  currentProject.compliance = currentProject.compliance || {};
+  const rec = currentProject.compliance[key] || { done:false, link:'' };
+  rec.done = !rec.done;
+  if (rec.done) rec.date = new Date().toISOString().split('T')[0];
+  currentProject.compliance[key] = rec;
+  renderComplianceList();
+  markDirty();
+}
+
+function updateComplianceLink(key, val) {
+  if (!currentProject) return;
+  currentProject.compliance = currentProject.compliance || {};
+  const rec = currentProject.compliance[key] || { done:false, link:'' };
+  rec.link = val;
+  currentProject.compliance[key] = rec;
+  markDirty();
+}
+
+function onPhaseOrStatusChange() {
+  if (!currentProject) return;
+  // atualiza modelo em memória para que applicableCompliance use os valores novos
+  currentProject.phase = document.getElementById('editPhase').value;
+  currentProject.status = document.getElementById('editStatus').value;
+  renderComplianceList();
+}
 const today = new Date(); today.setHours(0,0,0,0);
 
 function setSyncState(state, label) {
@@ -563,6 +696,14 @@ function populateEditOwnerSelect() {
   if (OWNERS[current]) sel.value = current;
 }
 
+function populatePatrocinadorSelect() {
+  const sel = document.getElementById('editPatrocinador');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">—</option>' + Object.entries(OWNERS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+  if (OWNERS[current]) sel.value = current;
+}
+
 async function save() {
   setSyncState('syncing', 'salvando...');
   try {
@@ -611,6 +752,17 @@ function renderDashboard() {
     (p.actions||[]).forEach(a=>{ if(!['Concluída','Cancelada'].includes(a.status)){totalA++;} if(isLate(a.dueDate,a.status))lateA++; });
   });
 
+  // Conformidade geral PO DES 001 (média dos projetos ativos com fase aplicável)
+  const compActive = projects
+    .filter(p => p.status !== 'Concluído')
+    .map(p => calcCompliance(p))
+    .filter(c => c.pct !== null);
+  const compAvg = compActive.length
+    ? Math.round(compActive.reduce((s,c)=>s+c.pct,0)/compActive.length)
+    : null;
+  const compBad = compActive.filter(c => c.pct < 50).length;
+  const compColor = compAvg===null ? '#94a3b8' : compAvg>=80 ? '#16a34a' : compAvg>=50 ? '#d97706' : '#dc2626';
+
   document.getElementById('kpiRow').innerHTML = `
     <div class="kpi-card kpi-green"><div class="kpi-num">${counts['No prazo']||0}</div><div class="kpi-label">No Prazo</div></div>
     <div class="kpi-card kpi-red"><div class="kpi-num">${counts['Atrasado']||0}</div><div class="kpi-label">Atrasados</div></div>
@@ -618,7 +770,8 @@ function renderDashboard() {
     <div class="kpi-card kpi-gray"><div class="kpi-num">${counts['Parado']||0}</div><div class="kpi-label">Parados</div></div>
     <div class="kpi-card" style="border-left:3px solid #1d4ed8"><div class="kpi-num" style="color:#1d4ed8">${counts['Concluído']||0}</div><div class="kpi-label">Concluídos</div></div>
     <div class="kpi-card kpi-blue"><div class="kpi-num">${totalA}</div><div class="kpi-label">Ações Pendentes</div></div>
-    <div class="kpi-card kpi-orange"><div class="kpi-num">${lateA}</div><div class="kpi-label">Ações Atrasadas</div></div>`;
+    <div class="kpi-card kpi-orange"><div class="kpi-num">${lateA}</div><div class="kpi-label">Ações Atrasadas</div></div>
+    <div class="kpi-card" style="border-left:3px solid ${compColor}" title="Média de conformidade PO DES 001 dos projetos ativos aplicáveis"><div class="kpi-num" style="color:${compColor}">${compAvg===null?'—':compAvg+'%'}</div><div class="kpi-label">Conf. PO DES 001${compBad>0?` · ${compBad} crítico(s)`:''}</div></div>`;
 
   const donutAreas = ['Des. Industrial','Des. Químico','Contratado'];
   document.getElementById('donutRow').innerHTML = donutAreas.map(area => {
@@ -730,6 +883,28 @@ function renderDashboard() {
         </div>
       </div>`).join('')
     : '<div style="color:var(--text2);padding:20px;text-align:center">✅ Nenhum projeto atrasado!</div>';
+
+  // Pendências de conformidade
+  const gaps = projects
+    .filter(p => p.status !== 'Concluído')
+    .map(p => ({ p, c: calcCompliance(p) }))
+    .filter(x => x.c.pct !== null && x.c.pending.length > 0)
+    .sort((a,b) => a.c.pct - b.c.pct);
+  const gapsEl = document.getElementById('complianceGaps');
+  if (!gaps.length) {
+    gapsEl.innerHTML = '<div style="color:var(--text2);padding:20px;text-align:center">✅ Todos os projetos ativos estão com registros PO DES 001 em dia!</div>';
+  } else {
+    gapsEl.innerHTML = `<div class="table-wrap" style="margin-top:6px"><table class="projects-table">
+      <thead><tr><th>Projeto</th><th>Área</th><th>Fase</th><th>Conf.</th><th>Registros faltando</th></tr></thead>
+      <tbody>${gaps.slice(0,20).map(x => `
+        <tr onclick="openProject('${x.p.id}')">
+          <td><span style="font-weight:600" title="${x.p.name}">${x.p.name.length>40?x.p.name.substring(0,40)+'…':x.p.name}</span></td>
+          <td><span class="badge badge-area">${x.p.area}</span></td>
+          <td><span class="badge badge-phase">${x.p.phase}</span></td>
+          <td>${complianceBadgeHTML(x.c.pct)}</td>
+          <td style="font-size:12px">${x.c.pending.map(it => `<span class="compliance-code" style="margin-right:4px">${it.code!=='—'?it.code:it.title}</span>`).join('')}</td>
+        </tr>`).join('')}</tbody></table></div>${gaps.length>20?`<div style="font-size:12px;color:var(--text2);margin-top:8px;text-align:center">+ ${gaps.length-20} projeto(s) com pendências não listados</div>`:''}`;
+  }
 }
 
 function getFiltered() {
@@ -761,6 +936,7 @@ function renderTable() {
     const cls=late>0?'has-late':pending.length>0?'pending':'all-ok';
     const lbl=late>0?`⚠ ${late} atrasada${late>1?'s':''}`:pending.length>0?`${pending.length} ação${pending.length>1?'ões':''}`:'✓';
     const rowCls = p.status === 'Concluído' ? ' class="concluido-row"' : '';
+    const comp = calcCompliance(p);
     return `<tr${rowCls} onclick="openProject('${p.id}')">
       <td style="font-family:monospace;font-size:12px;color:var(--text2)">${p.code||'—'}</td>
       <td><span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;display:block" title="${p.name}">${p.name}</span></td>
@@ -770,10 +946,11 @@ function renderTable() {
       <td style="font-size:12px">${OWNERS[p.owner]||p.owner}</td>
       <td style="font-size:12px">${fmt(p.previsaoFinal)}</td>
       <td><span class="actions-count ${cls}">${lbl}</span></td>
+      <td title="${comp.pct===null?'Aguardando fase avançar':comp.done+'/'+comp.applicable+' registros do PO DES 001'}">${complianceBadgeHTML(comp.pct)}</td>
     </tr>`;
   }).join('');
   container.innerHTML=`<div class="table-wrap"><table class="projects-table">
-    <thead><tr><th>Código</th><th>Projeto</th><th>Área</th><th>Fase</th><th>Status</th><th>Responsável</th><th>Previsão</th><th>Ações</th></tr></thead>
+    <thead><tr><th>Código</th><th>Projeto</th><th>Área</th><th>Fase</th><th>Status</th><th>Responsável</th><th>Previsão</th><th>Ações</th><th>Conf. PO</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -806,15 +983,18 @@ function openProject(id) {
   document.getElementById('editTipo').value=p.tipo;
   document.getElementById('editPrevisao').value=p.previsaoFinal||'';
   document.getElementById('editPrevisaoInicial').value=p.previsaoInicial||'';
+  document.getElementById('editSolicitante').value=p.solicitante||'';
+  populatePatrocinadorSelect();
+  document.getElementById('editPatrocinador').value=p.patrocinador||'';
   document.getElementById('updateInput').value='';
   _dirty = false;
-  renderActions(); renderUpdates(); populateEtapaSelect(); populateParentSelect(); populateActionRespSelect();
+  renderActions(); renderUpdates(); populateEtapaSelect(); populateParentSelect(); populateActionRespSelect(); renderComplianceList();
   document.getElementById('modalOverlay').classList.add('open');
 }
 
 function openNewProject() {
   const id='dnp-new-'+Date.now();
-  projects.push({id,name:'Novo Projeto',code:'',area:'Des. Industrial',phase:'Ideação',status:'No prazo',owner:'raphael',tipo:'Novo Produto',previsaoFinal:null,actions:[],updates:[],dataAtualizacao:null});
+  projects.push({id,name:'Novo Projeto',code:'',area:'Des. Industrial',phase:'Ideação',status:'No prazo',owner:'raphael',tipo:'Novo Produto',previsaoFinal:null,previsaoInicial:null,solicitante:'',patrocinador:'',compliance:{},actions:[],updates:[],dataAtualizacao:null});
   switchView('list');
   openProject(id);
 }
@@ -1048,6 +1228,8 @@ async function saveProject() {
   p.tipo=document.getElementById('editTipo').value;
   p.previsaoFinal=document.getElementById('editPrevisao').value||null;
   p.previsaoInicial=document.getElementById('editPrevisaoInicial').value||null;
+  p.solicitante=document.getElementById('editSolicitante').value||'';
+  p.patrocinador=document.getElementById('editPatrocinador').value||'';
   const txt=document.getElementById('updateInput').value.trim();
   if(txt){if(!p.updates)p.updates=[];p.updates.push({date:new Date().toISOString().split('T')[0],text:txt,author:OWNERS[p.owner]||p.owner});}
   p.dataAtualizacao=new Date().toISOString().split('T')[0];
