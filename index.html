@@ -236,6 +236,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
       <span class="sync-dot" id="syncDot"></span>
       <span id="syncLabel">carregando...</span>
     </div>
+    <button class="btn btn-outline btn-sm" onclick="openUsersModal()">👥 Usuários</button>
     <button class="btn btn-primary btn-sm" onclick="openNewProject()">+ Novo</button>
   </div>
 </div>
@@ -392,10 +393,30 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
   </div>
 </div>
 
+<!-- USERS MODAL -->
+<div class="modal-overlay" id="usersModalOverlay" onclick="if(event.target===this)closeUsersModal()">
+  <div class="modal" style="max-width:520px">
+    <button class="modal-close" onclick="closeUsersModal()">✕</button>
+    <div class="modal-title" style="font-size:18px;margin-bottom:4px">👥 Usuários</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Pessoas disponíveis como Responsável de projetos e ações. O e-mail é usado para avisos.</div>
+    <div id="usersList" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;margin-bottom:16px"></div>
+    <div class="add-action-form" style="border-top:1px solid var(--border);padding-top:14px">
+      <input type="text" id="newUserName" placeholder="Nome completo" style="flex:1;min-width:140px">
+      <input type="email" id="newUserEmail" placeholder="e-mail@policontrol.com.br" style="flex:1;min-width:180px">
+      <button class="btn btn-primary btn-sm" onclick="addUser()">+ Adicionar</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeUsersModal()">Fechar</button>
+      <button class="btn btn-primary" onclick="saveUsersAndClose()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <script>
-const OWNERS = { raphael:'Raphael Costa', rodrigo:'Rodrigo Costa', luciana:'Luciana Lima', teresa:'Teresa Costa', marcelo:'Marcelo Câmara' };
+let OWNERS = { raphael:'Raphael Costa', rodrigo:'Rodrigo Costa', luciana:'Luciana Lima', teresa:'Teresa Costa', marcelo:'Marcelo Câmara' };
+let USERS_LIST = [];
 const STATUS_COLORS = { 'No prazo':'#22c55e','Atrasado':'#ef4444','Em risco':'#f59e0b','Parado':'#94a3b8','Concluído':'#3b82f6' };
 
 let projects = [];
@@ -412,6 +433,9 @@ function setSyncState(state, label) {
 
 async function load(retries = 3) {
   setSyncState('syncing', 'carregando...');
+  await loadUsers();
+  populateEditOwnerSelect();
+  populateActionRespSelect();
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const r = await fetch('/api/projects', { cache: 'no-store' });
@@ -438,6 +462,105 @@ async function load(retries = 3) {
       }
     }
   }
+}
+
+/* ---- USUÁRIOS ---- */
+async function loadUsers() {
+  try {
+    const r = await fetch('/api/users', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const body = await r.json();
+    const list = Array.isArray(body.users) ? body.users : [];
+    if (list.length) {
+      USERS_LIST = list;
+      OWNERS = {};
+      USERS_LIST.forEach(u => { OWNERS[u.key] = u.name; });
+    }
+  } catch(e) {
+    console.warn('Falha ao carregar usuários, usando padrão local', e);
+  }
+}
+
+async function saveUsers() {
+  try {
+    const r = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ users: USERS_LIST }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return true;
+  } catch(e) {
+    showToast('Erro ao salvar usuários: ' + e.message, 'error');
+    return false;
+  }
+}
+
+function slugifyUserKey(name) {
+  const base = name.trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'user';
+  let key = base, n = 1;
+  while (USERS_LIST.some(u => u.key === key)) { key = `${base}-${++n}`; }
+  return key;
+}
+
+function renderUsersList() {
+  const el = document.getElementById('usersList');
+  if (!USERS_LIST.length) { el.innerHTML = '<div style="color:var(--text2);font-size:13px">Nenhum usuário cadastrado.</div>'; return; }
+  el.innerHTML = USERS_LIST.map((u, i) => `
+    <div style="display:flex;gap:8px;align-items:center;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+      <input type="text" value="${(u.name||'').replace(/"/g,'&quot;')}" oninput="USERS_LIST[${i}].name=this.value" style="flex:1;border:none;background:transparent;font-size:13px;font-weight:600;outline:none">
+      <input type="email" value="${(u.email||'').replace(/"/g,'&quot;')}" placeholder="e-mail" oninput="USERS_LIST[${i}].email=this.value" style="flex:1;border:none;background:transparent;font-size:12px;color:var(--text2);outline:none">
+      <button class="action-delete" onclick="removeUser(${i})" title="Remover">✕</button>
+    </div>`).join('');
+}
+
+function addUser() {
+  const name = document.getElementById('newUserName').value.trim();
+  const email = document.getElementById('newUserEmail').value.trim();
+  if (!name) { showToast('Informe o nome', 'error'); return; }
+  USERS_LIST.push({ key: slugifyUserKey(name), name, email: email || '' });
+  document.getElementById('newUserName').value = '';
+  document.getElementById('newUserEmail').value = '';
+  renderUsersList();
+}
+
+function removeUser(i) {
+  USERS_LIST.splice(i, 1);
+  renderUsersList();
+}
+
+function openUsersModal() {
+  renderUsersList();
+  document.getElementById('usersModalOverlay').classList.add('open');
+}
+function closeUsersModal() {
+  document.getElementById('usersModalOverlay').classList.remove('open');
+}
+async function saveUsersAndClose() {
+  OWNERS = {};
+  USERS_LIST.forEach(u => { OWNERS[u.key] = u.name; });
+  const ok = await saveUsers();
+  if (ok) {
+    showToast('✅ Usuários salvos!', 'success');
+    closeUsersModal();
+    populateEditOwnerSelect();
+    if (currentProject) { populateActionRespSelect(); }
+    if (document.getElementById('view-myactions').classList.contains('active')) {
+      document.getElementById('myActionsPerson').innerHTML = '<option value="">— Selecione —</option>';
+      populateMyActionsPersonSelect();
+    }
+    renderTable();
+  }
+}
+
+function populateEditOwnerSelect() {
+  const sel = document.getElementById('editOwner');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = Object.entries(OWNERS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+  if (OWNERS[current]) sel.value = current;
 }
 
 async function save() {
