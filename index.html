@@ -408,6 +408,17 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
         <select id="editPatrocinador" title="Aprovador da abertura do projeto (PO DES 001, passo 5-6)" onchange="markDirty(); renderModalPendencias();">
           <option value="">—</option>
         </select></div>
+      <div class="modal-field"><label>Data de Abertura</label><input type="date" id="editAbertura" title="Data em que o projeto foi formalmente aberto" onchange="markDirty(); renderModalPendencias();"></div>
+      <div class="modal-field"><label>Data de Início</label><input type="date" id="editInicio" title="Data efetiva de início dos trabalhos" onchange="markDirty(); renderModalPendencias();"></div>
+      <div class="modal-field"><label>Data de Conclusão</label><input type="date" id="editConclusao" title="Data real de encerramento (apenas para projetos concluídos)" onchange="markDirty(); renderModalPendencias();"></div>
+    </div>
+
+    <div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <label style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;font-weight:700">Descrição / Contexto do projeto</label>
+        <button type="button" class="btn btn-outline btn-sm" onclick="runInlineAiFromDescription()" title="Interpretar texto com IA e preencher campos/cronograma" style="font-weight:700">🤖 Interpretar & preencher</button>
+      </div>
+      <textarea id="editDescricao" class="update-input" placeholder="Escreva livremente sobre o projeto: contexto, objetivos, restrições, decisões tomadas, próximas etapas. A IA pode ler isso e sugerir preencher campos e cronograma." style="min-height:100px" oninput="markDirty()"></textarea>
     </div>
     <div>
       <div class="section-hdr">
@@ -446,8 +457,11 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     </div>
 
     <div class="update-section">
-      <div class="section-hdr" style="margin-bottom:8px">Registrar Atualização</div>
-      <textarea class="update-input" id="updateInput" placeholder="O que aconteceu? Decisões, bloqueios, progresso..."></textarea>
+      <div class="section-hdr" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+        <span>Registrar Atualização</span>
+        <button type="button" class="btn btn-outline btn-sm" onclick="runInlineAiFromUpdate()" title="IA extrai mudanças (status, prazo, ações) do texto" style="font-weight:700">🤖 Interpretar</button>
+      </div>
+      <textarea class="update-input" id="updateInput" placeholder="O que aconteceu? Decisões, bloqueios, progresso... (pode clicar '🤖 Interpretar' pra IA extrair mudanças automaticamente)"></textarea>
       <div class="update-list" id="updateList"></div>
     </div>
     <div class="modal-footer">
@@ -1185,6 +1199,10 @@ function openProject(id) {
   document.getElementById('editSolicitante').value=p.solicitante||'';
   populatePatrocinadorSelect();
   document.getElementById('editPatrocinador').value=p.patrocinador||'';
+  document.getElementById('editAbertura').value=p.dataAbertura||'';
+  document.getElementById('editInicio').value=p.dataInicio||'';
+  document.getElementById('editConclusao').value=p.dataConclusao||'';
+  document.getElementById('editDescricao').value=p.descricao||'';
   document.getElementById('updateInput').value='';
   _dirty = false;
   renderActions(); renderUpdates(); populateEtapaSelect(); populateParentSelect(); populateActionRespSelect(); updateComplianceHeaderTitle(); renderComplianceList(); renderModalPendencias();
@@ -1193,7 +1211,7 @@ function openProject(id) {
 
 function openNewProject() {
   const id='dnp-new-'+Date.now();
-  projects.push({id,name:'Novo Projeto',code:'',area:'Des. Industrial',phase:'Ideação',status:'No prazo',owner:'raphael',tipo:'Novo Produto',previsaoFinal:null,previsaoInicial:null,solicitante:'',patrocinador:'',compliance:{},actions:[],updates:[],dataAtualizacao:null});
+  projects.push({id,name:'Novo Projeto',code:'',area:'Des. Industrial',phase:'Ideação',status:'No prazo',owner:'raphael',tipo:'Novo Produto',previsaoFinal:null,previsaoInicial:null,dataAbertura:null,dataInicio:null,dataConclusao:null,descricao:'',solicitante:'',patrocinador:'',compliance:{},actions:[],updates:[],dataAtualizacao:null});
   switchView('list');
   openProject(id);
 }
@@ -1429,6 +1447,10 @@ async function saveProject() {
   p.previsaoInicial=document.getElementById('editPrevisaoInicial').value||null;
   p.solicitante=document.getElementById('editSolicitante').value||'';
   p.patrocinador=document.getElementById('editPatrocinador').value||'';
+  p.dataAbertura=document.getElementById('editAbertura').value||null;
+  p.dataInicio=document.getElementById('editInicio').value||null;
+  p.dataConclusao=document.getElementById('editConclusao').value||null;
+  p.descricao=document.getElementById('editDescricao').value||'';
   const txt=document.getElementById('updateInput').value.trim();
   if(txt){if(!p.updates)p.updates=[];p.updates.push({date:new Date().toISOString().split('T')[0],text:txt,author:OWNERS[p.owner]||p.owner});}
   p.dataAtualizacao=new Date().toISOString().split('T')[0];
@@ -1448,11 +1470,35 @@ let _aiResult = null;
 let _aiSelected = {};
 let _aiImageDataUrl = null;
 
-function openAiAssistant() {
+function openAiAssistant(prefillText) {
   if (!currentProject) return;
   resetAiAssistant();
+  if (prefillText) document.getElementById('aiText').value = prefillText;
   document.getElementById('aiModalOverlay').classList.add('open');
   setTimeout(() => document.getElementById('aiText').focus(), 100);
+}
+
+function runInlineAiFromDescription() {
+  const text = document.getElementById('editDescricao').value.trim();
+  if (!text) {
+    document.getElementById('editDescricao').focus();
+    showToast('Escreva algo na descrição antes de pedir para a IA interpretar.', 'error');
+    return;
+  }
+  openAiAssistant(text);
+  // Auto-processa
+  setTimeout(() => runAiAssistant(), 200);
+}
+
+function runInlineAiFromUpdate() {
+  const text = document.getElementById('updateInput').value.trim();
+  if (!text) {
+    document.getElementById('updateInput').focus();
+    showToast('Escreva algo em Registrar Atualização antes.', 'error');
+    return;
+  }
+  openAiAssistant(text);
+  setTimeout(() => runAiAssistant(), 200);
 }
 function closeAiAssistant() {
   document.getElementById('aiModalOverlay').classList.remove('open');
@@ -1527,6 +1573,7 @@ const AI_FIELD_LABELS = {
   name:'Nome', code:'Código', area:'Área', tipo:'Tipo',
   phase:'Fase', status:'Status',
   solicitante:'Solicitante', patrocinador:'Patrocinador', owner:'Responsável',
+  dataAbertura:'Data Abertura', dataInicio:'Data Início', dataConclusao:'Data Conclusão',
   previsaoInicial:'Previsão Inicial', previsaoFinal:'Previsão Final'
 };
 
@@ -1658,6 +1705,9 @@ function getCurrentFieldForAi(k) {
   if (k === 'owner') return currentProject.owner ? (OWNERS[currentProject.owner] || currentProject.owner) : '';
   if (k === 'previsaoInicial') return currentProject.previsaoInicial || '';
   if (k === 'previsaoFinal') return currentProject.previsaoFinal || '';
+  if (k === 'dataAbertura') return currentProject.dataAbertura || '';
+  if (k === 'dataInicio') return currentProject.dataInicio || '';
+  if (k === 'dataConclusao') return currentProject.dataConclusao || '';
   return '';
 }
 function formatAiValue(k, v) {
@@ -1686,6 +1736,9 @@ function applyAiSuggestions() {
     else if (k === 'owner') { currentProject.owner = v; document.getElementById('editOwner').value = v; }
     else if (k === 'previsaoInicial') { currentProject.previsaoInicial = v; document.getElementById('editPrevisaoInicial').value = v; }
     else if (k === 'previsaoFinal') { currentProject.previsaoFinal = v; document.getElementById('editPrevisao').value = v; }
+    else if (k === 'dataAbertura') { currentProject.dataAbertura = v; document.getElementById('editAbertura').value = v; }
+    else if (k === 'dataInicio') { currentProject.dataInicio = v; document.getElementById('editInicio').value = v; }
+    else if (k === 'dataConclusao') { currentProject.dataConclusao = v; document.getElementById('editConclusao').value = v; }
     appliedFields++;
   });
 

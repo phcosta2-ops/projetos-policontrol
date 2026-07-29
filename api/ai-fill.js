@@ -16,8 +16,12 @@ function buildPrompt(text, currentProject, users) {
     solicitante: currentProject.solicitante || '(vazio)',
     patrocinador: currentProject.patrocinador || '(vazio)',
     owner: currentProject.owner || '(vazio)',
+    dataAbertura: currentProject.dataAbertura || '(vazio)',
+    dataInicio: currentProject.dataInicio || '(vazio)',
+    dataConclusao: currentProject.dataConclusao || '(vazio)',
     previsaoInicial: currentProject.previsaoInicial || '(vazio)',
     previsaoFinal: currentProject.previsaoFinal || '(vazio)',
+    descricao: currentProject.descricao || '(vazio)',
     actionsCount: (currentProject.actions || []).length,
   } : null;
   const projText = proj ? Object.entries(proj).map(([k, v]) => `- ${k}: ${v}`).join('\n') : '(projeto novo, vazio)';
@@ -56,6 +60,9 @@ Sua tarefa: extrair informações e sugerir preenchimento. Retorne APENAS JSON v
     "solicitante": string ou null,
     "patrocinador": string ou null,
     "owner": string ou null,
+    "dataAbertura": "YYYY-MM-DD" ou null,
+    "dataInicio": "YYYY-MM-DD" ou null,
+    "dataConclusao": "YYYY-MM-DD" ou null,
     "previsaoInicial": "YYYY-MM-DD" ou null,
     "previsaoFinal": "YYYY-MM-DD" ou null
   },
@@ -75,6 +82,8 @@ REGRAS:
 - Cronograma: sugira 3-8 etapas iniciais só se houver contexto (ex: novo desenvolvimento). Para updates simples de projeto existente, retorne cronograma: [].
 - Etapas típicas Industrial: ESCOPO, HARDWARE, FIRMWARE, TESTES, DOCUMENTAÇÃO, LOTE PILOTO.
 - Etapas típicas Químico: ESCOPO, FORMULAÇÃO, TESTES, VALIDAÇÃO, LOTE PILOTO, RETENÇÃO.
+- Se o texto sugere que o projeto FOI CONCLUÍDO (ex: "encerrado", "entregue", "finalizado"), preencha status="Concluído" e dataConclusao com a data mencionada (ou hoje se não especificada).
+- Se o texto é uma ATUALIZAÇÃO sobre projeto existente (menciona mudanças de status/prazo/ações completadas), preencha só os campos que mudaram e deixe o resto null.
 - Retorne SÓ o JSON, nada mais.`;
 }
 
