@@ -473,6 +473,20 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
   </div>
 </div>
 
+<!-- REGISTROS ISO: TAP E CRONOGRAMA FORMAL -->
+<div class="modal-overlay" id="recordModalOverlay" onclick="if(event.target===this)closeRecordForm()">
+  <div class="modal" style="max-width:820px;max-height:88vh;overflow:auto">
+    <button class="modal-close" onclick="closeRecordForm()">✕</button>
+    <div class="modal-title" id="recordModalTitle" style="font-size:20px;margin-bottom:4px"></div>
+    <div id="recordModalSub" style="font-size:12px;color:var(--text2);margin-bottom:16px"></div>
+    <div id="recordFormBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeRecordForm()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveRecordForm()">💾 Salvar registro</button>
+    </div>
+  </div>
+</div>
+
 <!-- AI ASSISTANT MODAL -->
 <div class="modal-overlay" id="aiModalOverlay" onclick="if(event.target===this)closeAiAssistant()">
   <div class="modal" style="max-width:640px">
@@ -624,6 +638,7 @@ function renderComplianceList() {
       <div class="compliance-check ${done?'checked':''} ${!isApplicable?'disabled':''}" onclick="${isApplicable?`toggleCompliance('${it.key}')`:''}" title="${isApplicable?'Clique para marcar/desmarcar':'Ainda não aplicável para a fase atual'}"></div>
       <span class="compliance-title">${it.title}</span>
       ${it.code!=='—' ? `<span class="compliance-code">${it.code}</span>` : ''}
+      ${['tap','cronograma'].includes(it.key) && isApplicable ? `<button type="button" class="btn btn-outline btn-sm" onclick="openRecordForm('${it.key}')">${rec.formData?'Editar registro':'Preencher registro'}</button>` : ''}
       ${!isApplicable ? '<span class="compliance-na-tag">N/A</span>' : ''}
       <input type="text" class="compliance-link" placeholder="link/pasta (opcional)" value="${(rec.link||'').replace(/"/g,'&quot;')}" oninput="updateComplianceLink('${it.key}', this.value)" ${!isApplicable?'disabled':''}>
     </div>`;
@@ -655,6 +670,100 @@ function updateComplianceLink(key, val) {
   rec.link = val;
   currentProject.compliance[key] = rec;
   markDirty();
+}
+
+let activeRecordKey = null;
+
+function recordInput(label, id, value='', type='text', required=false, placeholder='') {
+  const safe = String(value || '').replace(/"/g, '&quot;');
+  const req = required ? ' <span style="color:#dc2626">*</span>' : '';
+  return `<div class="modal-field" style="margin-bottom:12px"><label>${label}${req}</label><input id="${id}" type="${type}" value="${safe}" placeholder="${placeholder}"></div>`;
+}
+function recordTextArea(label, id, value='', required=false, placeholder='') {
+  const req = required ? ' <span style="color:#dc2626">*</span>' : '';
+  return `<div style="margin-bottom:12px"><label style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;font-weight:700">${label}${req}</label><textarea id="${id}" class="update-input" style="min-height:74px;margin-top:5px" placeholder="${placeholder}">${String(value || '')}</textarea></div>`;
+}
+function currentFormValue(id, fallback='') {
+  const el = document.getElementById(id);
+  return el ? el.value : fallback;
+}
+function openRecordForm(key) {
+  if (!currentProject || !['tap','cronograma'].includes(key)) return;
+  activeRecordKey = key;
+  const rec = (currentProject.compliance || {})[key] || {};
+  const data = rec.formData || {};
+  const code = currentProject.code || 'SEM-CÓDIGO';
+  const projectName = currentFormValue('modalTitle', currentProject.name || '');
+  document.getElementById('recordModalTitle').textContent = key === 'tap' ? 'FORM DES 001 — Termo de Abertura do Projeto' : 'FORM DES 002 — Cronograma do Projeto';
+  document.getElementById('recordModalSub').textContent = `Registro digital vinculado ao projeto ${code} — ${projectName}. Os campos com * são obrigatórios para concluir o registro.`;
+
+  if (key === 'tap') {
+    document.getElementById('recordFormBody').innerHTML = `
+      <div class="modal-grid">
+        ${recordInput('Número do TAP','recordNumero',data.numero || `TAP-${code}`, 'text',true)}
+        ${recordInput('Data de emissão','recordData',data.data || new Date().toISOString().slice(0,10),'date',true)}
+        ${recordInput('Patrocinador do projeto','recordPatrocinador',data.patrocinador || currentFormValue('editPatrocinador',currentProject.patrocinador||''),'text',true)}
+        ${recordInput('Responsável pelo projeto','recordResponsavel',data.responsavel || currentFormValue('editOwner',currentProject.owner||''),'text',true)}
+      </div>
+      ${recordTextArea('Propósito / justificativa','recordJustificativa',data.justificativa || currentProject.descricao || '',true,'Por que este projeto deve ser realizado?')}
+      ${recordTextArea('Objetivo e critérios de sucesso','recordObjetivo',data.objetivo || '',true,'Metas, critérios de aceitação e resultado esperado.')}
+      ${recordTextArea('Escopo, produto/resultado e requisitos','recordEscopo',data.escopo || '',false,'Produto, requisitos técnicos, legais e de embalagem.')}
+      <div class="modal-grid">
+        ${recordTextArea('Orçamento / estimativa de custos','recordOrcamento',data.orcamento || '',false,'Custos estimados e etapa em que serão necessários.')}
+        ${recordTextArea('Partes interessadas','recordPartes',data.partes || '',false,'Áreas, cliente, fornecedor e demais envolvidos.')}
+      </div>
+      ${recordTextArea('Requisitos para aprovação / desvios aceitáveis','recordAprovacao',data.aprovacao || '',false,'Critérios para a aprovação do projeto.')}
+      <div style="padding:10px 12px;background:#eff6ff;border-radius:8px;font-size:12px;color:#1e40af">Ao salvar, o TAP será registrado como concluído na conformidade do projeto. A aprovação formal do patrocinador deve ser registrada no campo correspondente ou no link/pasta do checklist.</div>`;
+  } else {
+    const actions = currentProject.actions || [];
+    const actionRows = actions.length ? actions.map(a => `<tr><td>${a.etapa||'Geral'}</td><td>${a.num||''}</td><td>${a.title||''}</td><td>${a.inicio?fmt(a.inicio):'—'} → ${a.fim?fmt(a.fim):'—'}</td><td>${respLabel(a)}</td></tr>`).join('') : '<tr><td colspan="5" style="color:var(--text2)">Nenhuma atividade cadastrada. Crie as atividades no bloco “Ações” do projeto antes de concluir o cronograma.</td></tr>';
+    document.getElementById('recordFormBody').innerHTML = `
+      <div class="modal-grid">
+        ${recordInput('Número do cronograma','recordNumero',data.numero || `CRONO-${code}`,'text',true)}
+        ${recordInput('Data de emissão','recordData',data.data || new Date().toISOString().slice(0,10),'date',true)}
+        ${recordInput('Elaborado por','recordElaborado',data.elaborado || currentFormValue('editOwner',currentProject.owner||''),'text',true)}
+        ${recordInput('Aprovado por / patrocinador','recordAprovador',data.aprovador || currentFormValue('editPatrocinador',currentProject.patrocinador||''),'text',true)}
+      </div>
+      ${recordTextArea('Objetivo / observações do cronograma','recordObservacoes',data.observacoes || '',false,'Premissas, marcos, dependências e observações.')}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 6px"><strong style="font-size:13px">Atividades e marcos do cronograma</strong><button type="button" class="btn btn-outline btn-sm" onclick="goToActionsFromRecord()">Gerenciar atividades</button></div>
+      <div class="table-wrap"><table class="projects-table"><thead><tr><th>Etapa</th><th>Nº</th><th>Atividade</th><th>Período</th><th>Responsável</th></tr></thead><tbody>${actionRows}</tbody></table></div>
+      <div style="padding:10px 12px;margin-top:12px;background:#eff6ff;border-radius:8px;font-size:12px;color:#1e40af">O cronograma formal é composto pelas atividades, responsáveis e datas acima. Para concluir o FORM DES 002, inclua ao menos uma atividade e salve este registro.</div>`;
+  }
+  document.getElementById('recordModalOverlay').classList.add('open');
+}
+function goToActionsFromRecord() {
+  closeRecordForm();
+  document.querySelector('.section-hdr + #actionsList')?.scrollIntoView({behavior:'smooth',block:'center'});
+  setTimeout(() => document.getElementById('newActionTitle')?.focus(), 350);
+}
+function closeRecordForm() {
+  document.getElementById('recordModalOverlay').classList.remove('open');
+  activeRecordKey = null;
+}
+function saveRecordForm() {
+  if (!currentProject || !activeRecordKey) return;
+  const read = id => document.getElementById(id)?.value.trim() || '';
+  const data = { numero:read('recordNumero'), data:read('recordData') };
+  if (!data.numero || !data.data) { showToast('Preencha o número e a data de emissão do registro.', 'error'); return; }
+  if (activeRecordKey === 'tap') {
+    Object.assign(data,{patrocinador:read('recordPatrocinador'),responsavel:read('recordResponsavel'),justificativa:read('recordJustificativa'),objetivo:read('recordObjetivo'),escopo:read('recordEscopo'),orcamento:read('recordOrcamento'),partes:read('recordPartes'),aprovacao:read('recordAprovacao')});
+    if (!data.patrocinador || !data.responsavel || !data.justificativa || !data.objetivo) { showToast('Preencha os campos obrigatórios do TAP (*).', 'error'); return; }
+  } else {
+    Object.assign(data,{elaborado:read('recordElaborado'),aprovador:read('recordAprovador'),observacoes:read('recordObservacoes')});
+    if (!data.elaborado || !data.aprovador) { showToast('Preencha os campos obrigatórios do cronograma (*).', 'error'); return; }
+    if (!(currentProject.actions || []).length) { showToast('Inclua pelo menos uma atividade no cronograma antes de concluí-lo.', 'error'); return; }
+  }
+  currentProject.compliance = currentProject.compliance || {};
+  const rec = currentProject.compliance[activeRecordKey] || {};
+  rec.formData = data;
+  rec.done = true;
+  rec.date = new Date().toISOString().split('T')[0];
+  currentProject.compliance[activeRecordKey] = rec;
+  markDirty();
+  renderComplianceList();
+  renderModalPendencias();
+  closeRecordForm();
+  showToast(`✅ ${activeRecordKey === 'tap' ? 'TAP' : 'Cronograma formal'} registrado. Clique em Salvar para persistir.`, 'success');
 }
 
 function onPhaseOrStatusChange() {
