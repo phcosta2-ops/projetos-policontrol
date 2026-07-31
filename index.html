@@ -562,8 +562,9 @@ let filters = { status:'all', area:'all' };
 /* ---- CONFORMIDADE POR PROCEDIMENTO OPERACIONAL ---- */
 // Itens comuns (Industrial + Químico)
 const COMPLIANCE_COMMON = [
-  { key:'tap',          title:'Termo de Abertura (TAP)',   code:'FORM DES 001', minPhase:1 },
-  { key:'cronograma',   title:'Cronograma formal',         code:'FORM DES 002', minPhase:1 },
+  // TAP e cronograma fazem parte da abertura; devem estar disponíveis desde Ideação.
+  { key:'tap',          title:'Termo de Abertura (TAP)',   code:'FORM DES 001', minPhase:0 },
+  { key:'cronograma',   title:'Cronograma formal',         code:'FORM DES 002', minPhase:0 },
   { key:'validacao',    title:'Relatório de Validação',      code:'FORM DES 006', minPhase:3 },
 ];
 // Itens exclusivos Industrial (PO DES 001)
