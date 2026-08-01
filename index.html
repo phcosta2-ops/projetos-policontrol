@@ -284,6 +284,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
   <div class="nav-tab active" onclick="switchView('dashboard')">📊 Dashboard</div>
   <div class="nav-tab" onclick="switchView('list')">📋 Projetos</div>
   <div class="nav-tab" onclick="switchView('myactions')">👤 Minhas Ações</div>
+  <div class="nav-tab" onclick="switchView('inbox')">✉ Central de Entrada <span id="inboxBadge" style="display:none"></span></div>
 </div>
 
 <!-- DASHBOARD VIEW -->
@@ -358,6 +359,15 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     </select>
   </div>
   <div id="myActionsList"><div class="empty">👆 Selecione uma pessoa para ver as ações dela.</div></div>
+</div>
+
+<!-- CENTRAL DE ENTRADA PMO -->
+<div class="view" id="view-inbox">
+  <div class="dash-card" style="margin:0 28px 20px">
+    <div class="dash-card-title">Central de Entrada PMO</div>
+    <div class="dash-card-sub">E-mails analisados pela IA. A resposta de recebimento e as perguntas de complemento são automáticas; qualquer alteração no projeto exige revisão e salvamento humano.</div>
+  </div>
+  <div id="inboxList" style="margin:0 28px"><div class="loading">⏳ Carregando entradas...</div></div>
 </div>
 
 <!-- MODAL -->
@@ -603,6 +613,7 @@ let USERS_LIST = [];
 const STATUS_COLORS = { 'No prazo':'#22c55e','Atrasado':'#ef4444','Em risco':'#f59e0b','Parado':'#94a3b8','Concluído':'#3b82f6' };
 
 let projects = [];
+let inboxEntries = [];
 let currentProject = null;
 let filters = { status:'all', area:'all' };
 
@@ -963,6 +974,7 @@ function setSyncState(state, label) {
 async function load(retries = 3) {
   setSyncState('syncing', 'carregando...');
   await loadUsers();
+  await loadInbox();
   populateEditOwnerSelect();
   populateActionRespSelect();
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -1100,6 +1112,57 @@ function populatePatrocinadorSelect() {
   if (OWNERS[current]) sel.value = current;
 }
 
+async function loadInbox() {
+  try {
+    const r = await fetch('/api/inbox', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const body = await r.json();
+    inboxEntries = Array.isArray(body.entries) ? body.entries : [];
+    renderInbox();
+  } catch (e) {
+    console.warn('Falha ao carregar central de entrada', e);
+    const el = document.getElementById('inboxList');
+    if (el) el.innerHTML = '<div class="empty">Não foi possível carregar a Central de Entrada.</div>';
+  }
+}
+
+async function saveInbox() {
+  const r = await fetch('/api/inbox', {
+    method: 'POST', headers: { 'Content-Type':'application/json' },
+    body: JSON.stringify({ entries: inboxEntries }),
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+}
+
+function escHtml(v) { return String(v || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function renderInbox() {
+  const el = document.getElementById('inboxList');
+  const badge = document.getElementById('inboxBadge');
+  if (!el) return;
+  const pending = inboxEntries.filter(x => x.status !== 'Revisado').length;
+  if (badge) { badge.style.display = pending ? 'inline-flex' : 'none'; badge.textContent = pending; badge.style.cssText += ';background:#ef4444;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px'; }
+  if (!inboxEntries.length) { el.innerHTML = '<div class="empty">Nenhum e-mail processado ainda.</div>'; return; }
+  el.innerHTML = inboxEntries.slice().sort((a,b)=>String(b.receivedAt||'').localeCompare(String(a.receivedAt||''))).map((x, i) => {
+    const project = projects.find(p => p.id === x.projectId);
+    const status = x.status || 'Aguardando revisão';
+    const color = status === 'Revisado' ? '#dcfce7' : '#fef3c7';
+    return `<div class="dash-card" style="margin-bottom:12px;border-left:4px solid ${status==='Revisado'?'#22c55e':'#f59e0b'}">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div style="font-weight:800;font-size:15px">${escHtml(x.subject || 'Sem assunto')}</div><div class="dash-card-sub">De: ${escHtml(x.from)} · recebido em ${escHtml(x.receivedAt)} · confiança: ${escHtml(x.confidence || '—')}</div></div><span style="background:${color};padding:4px 8px;border-radius:99px;font-size:11px;font-weight:700">${escHtml(status)}</span></div>
+      <div style="margin-top:10px;font-size:13px"><strong>Projeto sugerido:</strong> ${project ? `${escHtml(project.code)} — ${escHtml(project.name)}` : escHtml(x.projectName || 'Não identificado')}</div>
+      <div style="margin-top:7px;font-size:13px;color:var(--text2)">${escHtml(x.summary || '')}</div>
+      <div style="margin-top:10px;padding:10px;background:#f8fafc;border-radius:7px;font-size:12px"><strong>Pendências solicitadas:</strong><br>${(x.questions || []).map(q => '• ' + escHtml(q)).join('<br>') || 'Nenhuma'}</div>
+      <div style="display:flex;gap:8px;margin-top:12px">${project ? `<button class="btn btn-outline btn-sm" onclick="openInboxProject('${project.id}')">Abrir projeto</button>` : ''}<button class="btn btn-primary btn-sm" onclick="markInboxReviewed(${i})">${status==='Revisado'?'Reabrir revisão':'Marcar como revisado'}</button></div>
+    </div>`;
+  }).join('');
+}
+function openInboxProject(id) { if (projects.some(x => x.id === id)) openProject(id); }
+async function markInboxReviewed(i) {
+  const ordered = inboxEntries.slice().sort((a,b)=>String(b.receivedAt||'').localeCompare(String(a.receivedAt||'')));
+  const target = ordered[i]; const original = inboxEntries.indexOf(target);
+  inboxEntries[original].status = inboxEntries[original].status === 'Revisado' ? 'Aguardando revisão' : 'Revisado';
+  try { await saveInbox(); renderInbox(); showToast('Central de Entrada atualizada.', 'success'); } catch(e) { showToast('Erro ao salvar a entrada: '+e.message, 'error'); }
+}
+
 async function save() {
   setSyncState('syncing', 'salvando...');
   try {
@@ -1127,9 +1190,10 @@ function switchView(v) {
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
-  const idx = {dashboard:0, list:1, myactions:2}[v] ?? 0;
+  const idx = {dashboard:0, list:1, myactions:2, inbox:3}[v] ?? 0;
   document.querySelectorAll('.nav-tab')[idx].classList.add('active');
   if (v === 'myactions') { populateMyActionsPersonSelect(); renderMyActions(); }
+  if (v === 'inbox') { loadInbox(); }
 }
 
 function renderDashboard() {
