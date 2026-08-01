@@ -458,6 +458,27 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     </div>
 
     <div class="update-section">
+      <div class="section-hdr" style="margin-bottom:4px;display:flex;align-items:center;justify-content:space-between">
+        <span>Evidências de Validação em Campo</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Registre cada período de operação no cliente, as leituras/resultados, o parecer e um gráfico ou foto. Essas evidências apoiam a emissão do relatório de validação.</div>
+      <div id="validationEvidenceList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
+      <div style="padding:12px;border:1px dashed var(--border);border-radius:8px;background:#fafcff">
+        <div class="modal-grid">
+          <div class="modal-field"><label>Mês / período de referência</label><input type="month" id="newValidationMonth"></div>
+          <div class="modal-field"><label>Contato / local</label><input type="text" id="newValidationContact" placeholder="Ex.: Fábio Portela — COMPESA ETA Tapacurá"></div>
+        </div>
+        <div class="modal-field" style="margin-bottom:10px"><label>Leituras, dados ou resumo técnico</label><textarea id="newValidationReadings" class="update-input" placeholder="Ex.: período, faixa observada, estabilidade, alarmes, comparações ou dados de planilha."></textarea></div>
+        <div class="modal-field" style="margin-bottom:10px"><label>Conclusão / retorno do cliente</label><textarea id="newValidationConclusion" class="update-input" placeholder="Ex.: operação robusta, satisfação do cliente, ajustes necessários, próximos passos."></textarea></div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label class="btn btn-outline btn-sm" style="cursor:pointer">📎 Anexar gráfico ou imagem<input type="file" id="newValidationImage" accept="image/*" style="display:none" onchange="onValidationEvidenceImage(this)"></label>
+          <span id="newValidationImageName" style="font-size:12px;color:var(--text2)"></span>
+          <button type="button" class="btn btn-primary btn-sm" onclick="addValidationEvidence()">+ Registrar evidência</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="update-section">
       <div class="section-hdr" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
         <span>Registrar Atualização</span>
         <button type="button" class="btn btn-outline btn-sm" onclick="runInlineAiFromUpdate()" title="IA extrai mudanças (status, prazo, ações) do texto" style="font-weight:700">🤖 Interpretar</button>
@@ -1316,7 +1337,7 @@ function openProject(id) {
   document.getElementById('editDescricao').value=p.descricao||'';
   document.getElementById('updateInput').value='';
   _dirty = false;
-  renderActions(); renderUpdates(); populateEtapaSelect(); populateParentSelect(); populateActionRespSelect(); updateComplianceHeaderTitle(); renderComplianceList(); renderModalPendencias();
+  renderActions(); renderUpdates(); renderValidationEvidence(); populateEtapaSelect(); populateParentSelect(); populateActionRespSelect(); updateComplianceHeaderTitle(); renderComplianceList(); renderModalPendencias();
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -1593,6 +1614,58 @@ function addAction() {
 function renderUpdates() {
   document.getElementById('updateList').innerHTML=(currentProject.updates||[]).slice().reverse()
     .map(u=>`<div class="update-item"><div class="update-item-date">${fmt(u.date)} — ${u.author||'Raphael'}</div><div>${u.text}</div></div>`).join('');
+}
+
+let pendingValidationImage = null;
+function escapeEvidence(v) {
+  return String(v || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function renderValidationEvidence() {
+  const wrap = document.getElementById('validationEvidenceList');
+  if (!wrap || !currentProject) return;
+  const evidences = currentProject.validationEvidence || [];
+  if (!evidences.length) {
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--text2);padding:4px 0">Nenhuma evidência de validação cadastrada.</div>';
+    return;
+  }
+  wrap.innerHTML = evidences.map((e,i) => `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:#fff">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong style="font-size:13px">${escapeEvidence(e.periodo || 'Período não informado')}</strong><span style="font-size:12px;color:var(--text2);margin-left:8px">${escapeEvidence(e.contact || '')}</span></div><button type="button" class="action-delete" title="Excluir evidência" onclick="deleteValidationEvidence(${i})">✕</button></div>
+    ${e.readings ? `<div style="font-size:12px;margin-top:6px"><b>Dados:</b> ${escapeEvidence(e.readings)}</div>` : ''}
+    ${e.conclusion ? `<div style="font-size:12px;margin-top:5px"><b>Conclusão:</b> ${escapeEvidence(e.conclusion)}</div>` : ''}
+    ${e.imageData ? `<img src="${e.imageData}" alt="${escapeEvidence(e.imageName || 'Evidência de validação')}" style="display:block;max-width:100%;max-height:260px;object-fit:contain;margin-top:8px;border:1px solid var(--border);border-radius:6px">` : ''}
+  </div>`).join('');
+}
+function onValidationEvidenceImage(input) {
+  const file = input.files && input.files[0];
+  pendingValidationImage = null;
+  document.getElementById('newValidationImageName').textContent = '';
+  if (!file) return;
+  if (file.size > 750 * 1024) { showToast('A imagem deve ter no máximo 750 KB. Prefira um screenshot compactado ou um link externo.', 'error'); input.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = () => { pendingValidationImage = {data:reader.result,name:file.name}; document.getElementById('newValidationImageName').textContent = file.name; };
+  reader.readAsDataURL(file);
+}
+function addValidationEvidence() {
+  if (!currentProject) return;
+  const periodo = document.getElementById('newValidationMonth').value;
+  const contact = document.getElementById('newValidationContact').value.trim();
+  const readings = document.getElementById('newValidationReadings').value.trim();
+  const conclusion = document.getElementById('newValidationConclusion').value.trim();
+  if (!periodo && !readings && !conclusion && !pendingValidationImage) { showToast('Informe ao menos o período, dados, conclusão ou imagem.', 'error'); return; }
+  currentProject.validationEvidence = currentProject.validationEvidence || [];
+  currentProject.validationEvidence.push({periodo,contact,readings,conclusion,imageData:pendingValidationImage?.data || '',imageName:pendingValidationImage?.name || '',createdAt:new Date().toISOString().slice(0,10)});
+  ['newValidationMonth','newValidationContact','newValidationReadings','newValidationConclusion'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('newValidationImage').value='';
+  document.getElementById('newValidationImageName').textContent='';
+  pendingValidationImage = null;
+  markDirty();
+  renderValidationEvidence();
+}
+function deleteValidationEvidence(i) {
+  if (!currentProject || !confirm('Excluir esta evidência de validação?')) return;
+  currentProject.validationEvidence.splice(i,1);
+  markDirty();
+  renderValidationEvidence();
 }
 
 async function saveProject() {
