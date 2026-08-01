@@ -308,10 +308,17 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     <div class="dash-card-sub"></div>
     <div class="bar-list" id="barChart"></div>
   </div>
-  <div class="dash-card dash-row-full">
-    <div class="dash-card-title" style="margin-bottom:4px">⚠ Pendências de Conformidade — PO DES 001 (Industrial) / PO DES 002 (Químico)</div>
-    <div class="dash-card-sub">Projetos ativos com registros obrigatórios faltando (TAP, Cronograma, Validação, Lote Piloto, Encerramento)</div>
-    <div id="complianceGaps"></div>
+  <div class="dash-row-2">
+    <div class="dash-card">
+      <div class="dash-card-title" style="margin-bottom:4px">⚠ Conformidade Industrial — PO DES 001</div>
+      <div class="dash-card-sub">Projetos ativos de Desenvolvimento Industrial e seus registros obrigatórios.</div>
+      <div id="complianceGapsIndustrial"></div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-card-title" style="margin-bottom:4px">⚠ Conformidade Química — PO DES 002</div>
+      <div class="dash-card-sub">Projetos ativos de Desenvolvimento Químico e seus registros obrigatórios.</div>
+      <div id="complianceGapsQuimico"></div>
+    </div>
   </div>
 </div>
 
@@ -1141,16 +1148,16 @@ function renderDashboard() {
     (p.actions||[]).forEach(a=>{ if(!['Concluída','Cancelada'].includes(a.status)){totalA++;} if(isLate(a.dueDate,a.status))lateA++; });
   });
 
-  // Conformidade geral PO DES 001 (média dos projetos ativos com fase aplicável)
-  const compActive = projects
-    .filter(p => p.status !== 'Concluído')
-    .map(p => calcCompliance(p))
-    .filter(c => c.pct !== null);
-  const compAvg = compActive.length
-    ? Math.round(compActive.reduce((s,c)=>s+c.pct,0)/compActive.length)
-    : null;
-  const compBad = compActive.filter(c => c.pct < 50).length;
-  const compColor = compAvg===null ? '#94a3b8' : compAvg>=80 ? '#16a34a' : compAvg>=50 ? '#d97706' : '#dc2626';
+  // Conformidade calculada separadamente por procedimento operacional.
+  const calcProcedureKpi = area => {
+    const items = projects.filter(p => p.area === area && p.status !== 'Concluído')
+      .map(p => ({p,c:calcCompliance(p)})).filter(x => x.c.pct !== null);
+    const avg = items.length ? Math.round(items.reduce((s,x)=>s+x.c.pct,0)/items.length) : null;
+    return { avg, total:items.length, critical:items.filter(x=>x.c.pct<50).length,
+      color:avg===null ? '#94a3b8' : avg>=80 ? '#16a34a' : avg>=50 ? '#d97706' : '#dc2626' };
+  };
+  const compIndustrial = calcProcedureKpi('Des. Industrial');
+  const compQuimico = calcProcedureKpi('Des. Químico');
 
   document.getElementById('kpiRow').innerHTML = `
     <div class="kpi-card kpi-green"><div class="kpi-num">${counts['No prazo']||0}</div><div class="kpi-label">No Prazo</div></div>
@@ -1160,7 +1167,8 @@ function renderDashboard() {
     <div class="kpi-card" style="border-left:3px solid #1d4ed8"><div class="kpi-num" style="color:#1d4ed8">${counts['Concluído']||0}</div><div class="kpi-label">Concluídos</div></div>
     <div class="kpi-card kpi-blue"><div class="kpi-num">${totalA}</div><div class="kpi-label">Ações Pendentes</div></div>
     <div class="kpi-card kpi-orange"><div class="kpi-num">${lateA}</div><div class="kpi-label">Ações Atrasadas</div></div>
-    <div class="kpi-card" style="border-left:3px solid ${compColor}" title="Média de conformidade PO DES (001 Industrial / 002 Químico) dos projetos ativos aplicáveis"><div class="kpi-num" style="color:${compColor}">${compAvg===null?'—':compAvg+'%'}</div><div class="kpi-label">Conf. PO DES${compBad>0?` · ${compBad} crítico(s)`:''}</div></div>`;
+    <div class="kpi-card" style="border-left:3px solid ${compIndustrial.color}" title="Média PO DES 001 dos projetos ativos de Desenvolvimento Industrial"><div class="kpi-num" style="color:${compIndustrial.color}">${compIndustrial.avg===null?'—':compIndustrial.avg+'%'}</div><div class="kpi-label">Conf. Industrial · PO 001${compIndustrial.critical?` · ${compIndustrial.critical} crítico(s)`:''}</div></div>
+    <div class="kpi-card" style="border-left:3px solid ${compQuimico.color}" title="Média PO DES 002 dos projetos ativos de Desenvolvimento Químico"><div class="kpi-num" style="color:${compQuimico.color}">${compQuimico.avg===null?'—':compQuimico.avg+'%'}</div><div class="kpi-label">Conf. Química · PO 002${compQuimico.critical?` · ${compQuimico.critical} crítico(s)`:''}</div></div>`;
 
   const donutAreas = ['Des. Industrial','Des. Químico','Contratado'];
   document.getElementById('donutRow').innerHTML = donutAreas.map(area => {
@@ -1273,28 +1281,17 @@ function renderDashboard() {
       </div>`).join('')
     : '<div style="color:var(--text2);padding:20px;text-align:center">✅ Nenhum projeto atrasado!</div>';
 
-  // Pendências de conformidade
-  const gaps = projects
-    .filter(p => p.status !== 'Concluído')
-    .map(p => ({ p, c: calcCompliance(p) }))
-    .filter(x => x.c.pct !== null && x.c.pending.length > 0)
-    .sort((a,b) => a.c.pct - b.c.pct);
-  const gapsEl = document.getElementById('complianceGaps');
-  if (!gaps.length) {
-    gapsEl.innerHTML = '<div style="color:var(--text2);padding:20px;text-align:center">✅ Todos os projetos ativos estão com registros PO DES em dia!</div>';
-  } else {
-    gapsEl.innerHTML = `<div class="table-wrap" style="margin-top:6px"><table class="projects-table">
-      <thead><tr><th>Projeto</th><th>Área</th><th>PO</th><th>Fase</th><th>Conf.</th><th>Registros faltando</th></tr></thead>
-      <tbody>${gaps.slice(0,20).map(x => `
-        <tr onclick="openProject('${x.p.id}')">
-          <td><span style="font-weight:600" title="${x.p.name}">${x.p.name.length>40?x.p.name.substring(0,40)+'…':x.p.name}</span></td>
-          <td><span class="badge badge-area">${x.p.area}</span></td>
-          <td><span class="compliance-code">${complianceProcedureFor(x.p.area)}</span></td>
-          <td><span class="badge badge-phase">${x.p.phase}</span></td>
-          <td>${complianceBadgeHTML(x.c.pct)}</td>
-          <td style="font-size:12px">${x.c.pending.map(it => `<span class="compliance-code" style="margin-right:4px">${it.code!=='—'?it.code:it.title}</span>`).join('')}</td>
-        </tr>`).join('')}</tbody></table></div>${gaps.length>20?`<div style="font-size:12px;color:var(--text2);margin-top:8px;text-align:center">+ ${gaps.length-20} projeto(s) com pendências não listados</div>`:''}`;
-  }
+  // Pendências segmentadas por procedimento: Industrial PO DES 001 e Químico PO DES 002.
+  const renderProcedureGaps = (area, targetId) => {
+    const gaps = projects.filter(p => p.area === area && p.status !== 'Concluído')
+      .map(p => ({p,c:calcCompliance(p)})).filter(x => x.c.pct !== null && x.c.pending.length)
+      .sort((a,b) => a.c.pct-b.c.pct);
+    const el = document.getElementById(targetId); if (!el) return;
+    if (!gaps.length) { el.innerHTML='<div style="color:var(--text2);padding:20px;text-align:center">✅ Sem pendências aplicáveis.</div>'; return; }
+    el.innerHTML=`<div class="table-wrap" style="margin-top:6px"><table class="projects-table"><thead><tr><th>Projeto</th><th>Fase</th><th>Conf.</th><th>Registros faltando</th></tr></thead><tbody>${gaps.slice(0,10).map(x=>`<tr onclick="openProject('${x.p.id}')"><td><span style="font-weight:600" title="${x.p.name}">${x.p.name.length>28?x.p.name.substring(0,28)+'…':x.p.name}</span></td><td><span class="badge badge-phase">${x.p.phase}</span></td><td>${complianceBadgeHTML(x.c.pct)}</td><td style="font-size:12px">${x.c.pending.map(it=>`<span class="compliance-code" style="margin-right:4px">${it.code!=='—'?it.code:it.title}</span>`).join('')}</td></tr>`).join('')}</tbody></table></div>${gaps.length>10?`<div style="font-size:12px;color:var(--text2);margin-top:8px;text-align:center">+ ${gaps.length-10} projeto(s)</div>`:''}`;
+  };
+  renderProcedureGaps('Des. Industrial','complianceGapsIndustrial');
+  renderProcedureGaps('Des. Químico','complianceGapsQuimico');
 }
 
 function getFiltered() {
