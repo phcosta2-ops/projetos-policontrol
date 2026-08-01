@@ -452,7 +452,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
     <div class="update-section">
       <div class="section-hdr" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
         <span id="complianceHeaderTitle">Conformidade PO DES 001</span>
-        <span id="complianceBadge" style="font-size:13px;font-weight:800"></span>
+        <div style="display:flex;align-items:center;gap:8px"><span id="complianceBadge" style="font-size:13px;font-weight:800"></span><button type="button" class="btn btn-outline btn-sm" onclick="openRecordForm('aprovacao')">Aprovação</button></div>
       </div>
       <div id="complianceList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px"></div>
     </div>
@@ -660,7 +660,7 @@ function renderComplianceList() {
       <div class="compliance-check ${done?'checked':''} ${!isApplicable?'disabled':''}" onclick="${isApplicable?`toggleCompliance('${it.key}')`:''}" title="${isApplicable?'Clique para marcar/desmarcar':'Ainda não aplicável para a fase atual'}"></div>
       <span class="compliance-title">${it.title}</span>
       ${it.code!=='—' ? `<span class="compliance-code">${it.code}</span>` : ''}
-      ${['tap','cronograma'].includes(it.key) && isApplicable ? `<button type="button" class="btn btn-outline btn-sm" onclick="openRecordForm('${it.key}')">${rec.formData?'Editar registro':'Preencher registro'}</button>` : ''}
+      ${['tap','cronograma','validacao','lotePiloto','encerramento'].includes(it.key) && isApplicable ? `<button type="button" class="btn btn-outline btn-sm" onclick="openRecordForm('${it.key}')">${rec.formData?'Editar registro':'Preencher registro'}</button>` : ''}
       ${!isApplicable ? '<span class="compliance-na-tag">N/A</span>' : ''}
       <input type="text" class="compliance-link" placeholder="link/pasta (opcional)" value="${(rec.link||'').replace(/"/g,'&quot;')}" oninput="updateComplianceLink('${it.key}', this.value)" ${!isApplicable?'disabled':''}>
     </div>`;
@@ -710,13 +710,14 @@ function currentFormValue(id, fallback='') {
   return el ? el.value : fallback;
 }
 function openRecordForm(key) {
-  if (!currentProject || !['tap','cronograma'].includes(key)) return;
+  if (!currentProject || !['tap','cronograma','validacao','lotePiloto','encerramento','aprovacao'].includes(key)) return;
   activeRecordKey = key;
-  const rec = (currentProject.compliance || {})[key] || {};
+  const rec = key === 'aprovacao' ? (currentProject.aprovacao || {}) : ((currentProject.compliance || {})[key] || {});
   const data = rec.formData || {};
   const code = currentProject.code || 'SEM-CÓDIGO';
   const projectName = currentFormValue('modalTitle', currentProject.name || '');
-  document.getElementById('recordModalTitle').textContent = key === 'tap' ? 'FORM DES 001 — Termo de Abertura do Projeto' : 'FORM DES 002 — Cronograma do Projeto';
+  const titles = {tap:'FORM DES 001 — Termo de Abertura do Projeto',cronograma:'FORM DES 002 — Cronograma do Projeto',validacao:'FORM DES 006 — Relatório de Validação',lotePiloto:'FORM CQ 043 — Verificação de Lote Piloto',encerramento:'Encerramento do Projeto',aprovacao:'Aprovação do Projeto'};
+  document.getElementById('recordModalTitle').textContent = titles[key];
   document.getElementById('recordModalSub').textContent = `Registro digital vinculado ao projeto ${code} — ${projectName}. Os campos com * são obrigatórios para concluir o registro.`;
 
   if (key === 'tap') {
@@ -736,7 +737,7 @@ function openRecordForm(key) {
       </div>
       ${recordTextArea('Requisitos para aprovação / desvios aceitáveis','recordAprovacao',data.aprovacao || '',false,'Critérios para a aprovação do projeto.')}
       <div style="padding:10px 12px;background:#eff6ff;border-radius:8px;font-size:12px;color:#1e40af">Ao salvar, o TAP será registrado como concluído na conformidade do projeto. A aprovação formal do patrocinador deve ser registrada no campo correspondente ou no link/pasta do checklist.</div>`;
-  } else {
+  } else if (key === 'cronograma') {
     const actions = currentProject.actions || [];
     const actionRows = actions.length ? actions.map(a => `<tr><td>${a.etapa||'Geral'}</td><td>${a.num||''}</td><td>${a.title||''}</td><td>${a.inicio?fmt(a.inicio):'—'} → ${a.fim?fmt(a.fim):'—'}</td><td>${respLabel(a)}</td></tr>`).join('') : '<tr><td colspan="5" style="color:var(--text2)">Nenhuma atividade cadastrada. Crie as atividades no bloco “Ações” do projeto antes de concluir o cronograma.</td></tr>';
     document.getElementById('recordFormBody').innerHTML = `
@@ -750,6 +751,14 @@ function openRecordForm(key) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 6px"><strong style="font-size:13px">Atividades e marcos do cronograma</strong><button type="button" class="btn btn-outline btn-sm" onclick="goToActionsFromRecord()">Gerenciar atividades</button></div>
       <div class="table-wrap"><table class="projects-table"><thead><tr><th>Etapa</th><th>Nº</th><th>Atividade</th><th>Período</th><th>Responsável</th></tr></thead><tbody>${actionRows}</tbody></table></div>
       <div style="padding:10px 12px;margin-top:12px;background:#eff6ff;border-radius:8px;font-size:12px;color:#1e40af">O cronograma formal é composto pelas atividades, responsáveis e datas acima. Para concluir o FORM DES 002, inclua ao menos uma atividade e salve este registro.</div>`;
+  } else if (key === 'validacao') {
+    document.getElementById('recordFormBody').innerHTML = `<div class="modal-grid">${recordInput('Número do relatório','recordNumero',data.numero||`VAL-${code}`,'text',true)}${recordInput('Data de emissão','recordData',data.data||new Date().toISOString().slice(0,10),'date',true)}${recordInput('Responsável técnico','recordResponsavel',data.responsavel||currentFormValue('editOwner',currentProject.owner||''),'text',true)}${recordInput('Cliente / local de validação','recordCliente',data.cliente||'','text',true)}</div>${recordTextArea('Período de validação','recordPeriodo',data.periodo||'',true,'Ex.: 01/03/2026 a 30/07/2026')}${recordTextArea('Critérios e método de validação','recordCriterios',data.criterios||'',true,'Especificações, método, limites e critérios de aceitação.')}${recordTextArea('Dados e evidências analisadas','recordDados',data.dados||'',true,'Referencie leituras e gráficos cadastrados em Evidências de Validação.')}${recordTextArea('Resultados e conclusão','recordResultado',data.resultado||'',true,'Resultado, desvios e conclusão técnica.')}${recordTextArea('Recomendação / aprovação para próxima etapa','recordRecomendacao',data.recomendacao||'',false,'Liberar, repetir teste, corrigir ou encerrar.')}`;
+  } else if (key === 'lotePiloto') {
+    document.getElementById('recordFormBody').innerHTML = `<div class="modal-grid">${recordInput('Número da verificação','recordNumero',data.numero||`LP-${code}`,'text',true)}${recordInput('Data da verificação','recordData',data.data||new Date().toISOString().slice(0,10),'date',true)}${recordInput('Responsável pela inspeção','recordResponsavel',data.responsavel||'','text',true)}${recordInput('Quantidade / identificação do lote','recordQuantidade',data.quantidade||'','text',true)}</div>${recordTextArea('Lista de materiais / referência','recordMateriais',data.materiais||'',false,'Código, link ou referência da lista de materiais.')}${recordTextArea('Local e condições de produção/instalação','recordLocal',data.local||'',true,'Local, equipamentos e condições relevantes.')}${recordTextArea('Resultados da verificação','recordResultado',data.resultado||'',true,'Inspeções, testes, não conformidades e resultados.')}${recordTextArea('Disposição do lote piloto','recordDisposicao',data.disposicao||'',true,'Aprovado, reprovado, retrabalho ou liberação.')}`;
+  } else if (key === 'encerramento') {
+    document.getElementById('recordFormBody').innerHTML = `<div class="modal-grid">${recordInput('Número do encerramento','recordNumero',data.numero||`ENC-${code}`,'text',true)}${recordInput('Data de encerramento','recordData',data.data||new Date().toISOString().slice(0,10),'date',true)}${recordInput('Responsável pelo encerramento','recordResponsavel',data.responsavel||currentFormValue('editOwner',currentProject.owner||''),'text',true)}${recordInput('Aprovador do encerramento','recordAprovador',data.aprovador||currentFormValue('editPatrocinador',currentProject.patrocinador||''),'text',true)}</div>${recordTextArea('Entregas e registros concluídos','recordEntregas',data.entregas||'',true,'Produto, documentos, treinamento, registros e entregáveis.')}${recordTextArea('Avaliação final e lições aprendidas','recordLicoes',data.licoes||'',true,'Resultado do projeto, riscos, aprendizados e melhorias.')}${recordTextArea('Pendências pós-encerramento','recordPendencias',data.pendencias||'',false,'Vazio quando não houver pendências.')}${recordTextArea('Decisão de encerramento','recordDecisao',data.decisao||'',true,'Justificativa e aprovação para encerrar.')}`;
+  } else {
+    document.getElementById('recordFormBody').innerHTML = `<div class="modal-grid">${recordInput('Número da aprovação','recordNumero',data.numero||`APR-${code}`,'text',true)}${recordInput('Data da decisão','recordData',data.data||new Date().toISOString().slice(0,10),'date',true)}${recordInput('Aprovador','recordAprovador',data.aprovador||currentFormValue('editPatrocinador',currentProject.patrocinador||''),'text',true)}${recordInput('Decisão','recordDecisao',data.decisao||'Aprovado','text',true,'Aprovado, reprovado ou aprovado com ressalvas')}</div>${recordTextArea('Escopo da aprovação','recordEscopo',data.escopo||'',true,'Ex.: abertura, cronograma, validação, lote piloto ou encerramento.')}${recordTextArea('Comentários / condições','recordComentarios',data.comentarios||'',false,'Condições, ressalvas e encaminhamentos.')}`;
   }
   document.getElementById('recordModalOverlay').classList.add('open');
 }
@@ -767,25 +776,42 @@ function saveRecordForm() {
   const read = id => document.getElementById(id)?.value.trim() || '';
   const data = { numero:read('recordNumero'), data:read('recordData') };
   if (!data.numero || !data.data) { showToast('Preencha o número e a data de emissão do registro.', 'error'); return; }
-  if (activeRecordKey === 'tap') {
+  const key = activeRecordKey;
+  if (key === 'tap') {
     Object.assign(data,{patrocinador:read('recordPatrocinador'),responsavel:read('recordResponsavel'),justificativa:read('recordJustificativa'),objetivo:read('recordObjetivo'),escopo:read('recordEscopo'),orcamento:read('recordOrcamento'),partes:read('recordPartes'),aprovacao:read('recordAprovacao')});
     if (!data.patrocinador || !data.responsavel || !data.justificativa || !data.objetivo) { showToast('Preencha os campos obrigatórios do TAP (*).', 'error'); return; }
-  } else {
+  } else if (key === 'cronograma') {
     Object.assign(data,{elaborado:read('recordElaborado'),aprovador:read('recordAprovador'),observacoes:read('recordObservacoes')});
-    if (!data.elaborado || !data.aprovador) { showToast('Preencha os campos obrigatórios do cronograma (*).', 'error'); return; }
-    if (!(currentProject.actions || []).length) { showToast('Inclua pelo menos uma atividade no cronograma antes de concluí-lo.', 'error'); return; }
+    if (!data.elaborado || !data.aprovador || !(currentProject.actions || []).length) { showToast('Informe elaborador, aprovador e ao menos uma atividade do cronograma.', 'error'); return; }
+  } else if (key === 'validacao') {
+    Object.assign(data,{responsavel:read('recordResponsavel'),cliente:read('recordCliente'),periodo:read('recordPeriodo'),criterios:read('recordCriterios'),dados:read('recordDados'),resultado:read('recordResultado'),recomendacao:read('recordRecomendacao')});
+    if (!data.responsavel || !data.cliente || !data.periodo || !data.criterios || !data.dados || !data.resultado) { showToast('Preencha os campos obrigatórios do relatório de validação (*).', 'error'); return; }
+  } else if (key === 'lotePiloto') {
+    Object.assign(data,{responsavel:read('recordResponsavel'),quantidade:read('recordQuantidade'),materiais:read('recordMateriais'),local:read('recordLocal'),resultado:read('recordResultado'),disposicao:read('recordDisposicao')});
+    if (!data.responsavel || !data.quantidade || !data.local || !data.resultado || !data.disposicao) { showToast('Preencha os campos obrigatórios da verificação de lote piloto (*).', 'error'); return; }
+  } else if (key === 'encerramento') {
+    Object.assign(data,{responsavel:read('recordResponsavel'),aprovador:read('recordAprovador'),entregas:read('recordEntregas'),licoes:read('recordLicoes'),pendencias:read('recordPendencias'),decisao:read('recordDecisao')});
+    if (!data.responsavel || !data.aprovador || !data.entregas || !data.licoes || !data.decisao) { showToast('Preencha os campos obrigatórios do encerramento (*).', 'error'); return; }
+  } else {
+    Object.assign(data,{aprovador:read('recordAprovador'),decisao:read('recordDecisao'),escopo:read('recordEscopo'),comentarios:read('recordComentarios')});
+    if (!data.aprovador || !data.decisao || !data.escopo) { showToast('Preencha os campos obrigatórios da aprovação (*).', 'error'); return; }
+    currentProject.aprovacao = {formData:data,date:new Date().toISOString().split('T')[0]};
+    markDirty(); closeRecordForm();
+    showToast('✅ Aprovação registrada. Clique em Salvar para persistir.', 'success');
+    return;
   }
   currentProject.compliance = currentProject.compliance || {};
-  const rec = currentProject.compliance[activeRecordKey] || {};
+  const rec = currentProject.compliance[key] || {};
   rec.formData = data;
   rec.done = true;
   rec.date = new Date().toISOString().split('T')[0];
-  currentProject.compliance[activeRecordKey] = rec;
+  currentProject.compliance[key] = rec;
   markDirty();
   renderComplianceList();
   renderModalPendencias();
   closeRecordForm();
-  showToast(`✅ ${activeRecordKey === 'tap' ? 'TAP' : 'Cronograma formal'} registrado. Clique em Salvar para persistir.`, 'success');
+  const labels = {tap:'TAP',cronograma:'Cronograma formal',validacao:'Relatório de validação',lotePiloto:'Verificação de lote piloto',encerramento:'Encerramento'};
+  showToast(`✅ ${labels[key]} registrado. Clique em Salvar para persistir.`, 'success');
 }
 
 function onPhaseOrStatusChange() {
