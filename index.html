@@ -149,7 +149,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .action-item { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; display: flex; gap: 10px; align-items: flex-start; }
 .action-item.late { border-color: #fca5a5; background: #fff1f1; }
 .action-item.done { opacity: 0.5; }
-.action-check { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.action-check { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border); background: transparent; padding: 0; cursor: pointer; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
 .action-check:hover { border-color: var(--accent); }
 .action-check.checked { background: var(--green); border-color: var(--green); }
 .action-check.checked::after { content: '✓'; color: #fff; font-size: 10px; font-weight: 700; }
@@ -199,7 +199,6 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 .action-resp-badge { font-size: 11px; color: var(--text2); background: #f1f5f9; border-radius: 4px; padding: 2px 7px; white-space: nowrap; flex-shrink: 0; }
 .action-dates { font-size: 11px; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
 .action-dias { font-size: 11px; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
-.action-late-crono { font-size: 11px; color: var(--red); font-weight: 700; white-space: nowrap; flex-shrink: 0; }
 /* ADD ACTION FORM */
 .add-action-form { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
 .add-action-form input, .add-action-form select { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; color: var(--text); font-size: 13px; outline: none; }
@@ -335,7 +334,6 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
       <button class="filter-btn" onclick="setFilter('status','No prazo',this)">No Prazo</button>
       <button class="filter-btn" onclick="setFilter('status','Parado',this)">Parado</button>
       <button class="filter-btn" onclick="setFilter('status','Concluído',this)">Concluídos</button>
-      <button class="filter-btn" onclick="setFilter('status','com-acoes-atrasadas',this)">⚠ Ações Atrasadas</button>
     </div>
     <span class="filter-sep">|</span>
     <div style="display:flex;gap:6px" id="areaFilters">
@@ -1198,7 +1196,7 @@ function switchView(v) {
 
 function renderDashboard() {
   const counts = {}, areas = {};
-  let totalA=0, lateA=0;
+  let totalA=0;
   projects.forEach(p => {
     counts[p.status]=(counts[p.status]||0)+1;
     if (!areas[p.area]) areas[p.area]={total:0,active:0,atrasado:0,risco:0,prazo:0,parado:0,concluido:0};
@@ -1209,7 +1207,7 @@ function renderDashboard() {
     else if (p.status==='No prazo') areas[p.area].prazo++;
     else if (p.status==='Parado') areas[p.area].parado++;
     else if (p.status==='Concluído') areas[p.area].concluido++;
-    (p.actions||[]).forEach(a=>{ if(!['Concluída','Cancelada'].includes(a.status)){totalA++;} if(isLate(a.dueDate,a.status))lateA++; });
+    (p.actions||[]).forEach(a=>{ if(!['Concluída','Cancelada'].includes(a.status)) totalA++; });
   });
 
   // Conformidade calculada separadamente por procedimento operacional.
@@ -1230,7 +1228,6 @@ function renderDashboard() {
     <div class="kpi-card kpi-gray"><div class="kpi-num">${counts['Parado']||0}</div><div class="kpi-label">Parados</div></div>
     <div class="kpi-card" style="border-left:3px solid #1d4ed8"><div class="kpi-num" style="color:#1d4ed8">${counts['Concluído']||0}</div><div class="kpi-label">Concluídos</div></div>
     <div class="kpi-card kpi-blue"><div class="kpi-num">${totalA}</div><div class="kpi-label">Ações Pendentes</div></div>
-    <div class="kpi-card kpi-orange"><div class="kpi-num">${lateA}</div><div class="kpi-label">Ações Atrasadas</div></div>
     <div class="kpi-card" style="border-left:3px solid ${compIndustrial.color}" title="Média PO DES 001 dos projetos ativos de Desenvolvimento Industrial"><div class="kpi-num" style="color:${compIndustrial.color}">${compIndustrial.avg===null?'—':compIndustrial.avg+'%'}</div><div class="kpi-label">Conf. Industrial · PO 001${compIndustrial.critical?` · ${compIndustrial.critical} crítico(s)`:''}</div></div>
     <div class="kpi-card" style="border-left:3px solid ${compQuimico.color}" title="Média PO DES 002 dos projetos ativos de Desenvolvimento Químico"><div class="kpi-num" style="color:${compQuimico.color}">${compQuimico.avg===null?'—':compQuimico.avg+'%'}</div><div class="kpi-label">Conf. Química · PO 002${compQuimico.critical?` · ${compQuimico.critical} crítico(s)`:''}</div></div>`;
 
@@ -1360,17 +1357,8 @@ function renderDashboard() {
 
 function getFiltered() {
   const q = document.getElementById('searchInput').value.toLowerCase();
-  const todayStr = new Date().toISOString().split('T')[0];
   return projects.filter(p => {
-    if (filters.status === 'com-acoes-atrasadas') {
-      const hasLate = (p.actions||[]).some(a => {
-        const due = a.fim || a.dueDate || null;
-        return due && !['Concluída','Cancelada'].includes(a.status) && due < todayStr;
-      });
-      if (!hasLate) return false;
-    } else if (filters.status!=='all'&&p.status!==filters.status) {
-      return false;
-    }
+    if (filters.status!=='all'&&p.status!==filters.status) return false;
     if (filters.area!=='all'&&p.area!==filters.area) return false;
     if (q&&!p.name.toLowerCase().includes(q)&&!(p.code||'').toLowerCase().includes(q)) return false;
     return true;
@@ -1383,9 +1371,8 @@ function renderTable() {
   if (!filtered.length) { container.innerHTML='<div class="empty">📭 Nenhum projeto encontrado</div>'; return; }
   const rows = filtered.map(p => {
     const pending=(p.actions||[]).filter(a=>!['Concluída','Cancelada'].includes(a.status));
-    const late=pending.filter(a=>isLate(a.dueDate,a.status)).length;
-    const cls=late>0?'has-late':pending.length>0?'pending':'all-ok';
-    const lbl=late>0?`⚠ ${late} atrasada${late>1?'s':''}`:pending.length>0?`${pending.length} ação${pending.length>1?'ões':''}`:'✓';
+    const cls=pending.length>0?'pending':'all-ok';
+    const lbl=pending.length>0?`${pending.length} pendente${pending.length>1?'s':''}`:'✓';
     const rowCls = p.status === 'Concluído' ? ' class="concluido-row"' : '';
     const comp = calcCompliance(p);
     return `<tr${rowCls} onclick="openProject('${p.id}')">
@@ -1541,21 +1528,18 @@ function renderActions() {
       const inicioDate = a.inicio || null;
       const resp = respLabel(a);
       const done = ['Concluída', 'Cancelada'].includes(a.status);
-      const late = !done && fimDate && fimDate < todayStr;
-      const lateDays = late ? daysLate(fimDate) : 0;
       const datesStr = (inicioDate || fimDate)
         ? `${inicioDate ? fmt(inicioDate) : '—'} → ${fimDate ? fmt(fimDate) : '—'}`
         : '';
       const diasStr = a.dias ? `${a.dias}d` : '';
-      html += `<div class="action-row-crono ${late ? 'late' : ''} ${done ? 'done' : ''}" style="margin-left:${depth*22}px">
+      html += `<div class="action-row-crono ${done ? 'done' : ''}" style="margin-left:${depth*22}px">
         ${depth>0 ? '<span style="color:var(--text2);font-size:12px;flex-shrink:0">↳</span>' : ''}
-        <div class="action-check ${done ? 'checked' : ''}" onclick="toggleAction(${i})"></div>
+        <button type="button" class="action-check ${done ? 'checked' : ''}" onclick="toggleAction(${i})" title="${done ? 'Reabrir atividade' : 'Marcar atividade como concluída'}" aria-label="${done ? 'Reabrir atividade' : 'Marcar atividade como concluída'}"></button>
         ${a.num ? `<span class="action-num">${a.num}</span>` : ''}
         <span class="action-row-title">${a.title}</span>
         ${resp !== '—' ? `<span class="action-resp-badge">${resp}</span>` : ''}
         ${datesStr ? `<span class="action-dates">${datesStr}</span>` : ''}
         ${diasStr ? `<span class="action-dias">${diasStr}</span>` : ''}
-        ${late ? `<span class="action-late-crono">⚠ ${lateDays}d atraso</span>` : ''}
         <button class="action-delete" title="Editar atividade" onclick="editAction(${i})" style="color:var(--accent)">✎</button>
         <button class="action-delete" title="Excluir atividade" onclick="deleteAction(${i})">✕</button>
       </div>`;
@@ -2170,29 +2154,25 @@ function renderMyActions() {
   const key = document.getElementById('myActionsPerson').value;
   const container = document.getElementById('myActionsList');
   if (!key) { container.innerHTML = '<div class="empty">👆 Selecione uma pessoa para ver as ações dela.</div>'; return; }
-  const todayStr = new Date().toISOString().split('T')[0];
   const rows = [];
   projects.forEach(p => {
     (p.actions||[]).forEach(a => {
       if (matchesOwner(a, key)) {
         const done = ['Concluída','Cancelada'].includes(a.status);
         const fimDate = a.fim || a.dueDate || null;
-        const late = !done && fimDate && fimDate < todayStr;
-        rows.push({ project: p, action: a, done, late, fimDate });
+        rows.push({ project: p, action: a, done, fimDate });
       }
     });
   });
   if (!rows.length) { container.innerHTML = '<div class="empty">✅ Nenhuma ação mapeada para esta pessoa.</div>'; return; }
   rows.sort((x,y) => {
-    if (x.late !== y.late) return x.late ? -1 : 1;
     if (x.done !== y.done) return x.done ? 1 : -1;
     return (x.fimDate||'9999-99-99') < (y.fimDate||'9999-99-99') ? -1 : 1;
   });
   container.innerHTML = `<div class="table-wrap"><table class="projects-table">
     <thead><tr><th>Projeto</th><th>Etapa</th><th>Atividade</th><th>Prazo</th><th>Situação</th></tr></thead>
     <tbody>${rows.map(r => {
-      const lateDays = r.late ? daysLate(r.fimDate) : 0;
-      const sit = r.done ? '<span class="badge badge-concluido">✓ Concluída</span>' : r.late ? `<span class="badge badge-atrasado">⚠ ${lateDays}d atraso</span>` : '<span class="badge badge-prazo">No prazo</span>';
+      const sit = r.done ? '<span class="badge badge-concluido">✓ Concluída</span>' : '<span class="badge badge-prazo">Pendente</span>';
       return `<tr onclick="switchView('list');openProject('${r.project.id}')" style="cursor:pointer">
         <td style="font-weight:600">${r.project.name}</td>
         <td><span class="badge badge-phase">${r.action.etapa||'Geral'}</span></td>
